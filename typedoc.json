@@ -1,0 +1,18 @@
+{
+  "entryPoints": ["./lib/analytics.ts"],
+  "out": "docs",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "categorizeByGroup": false,
+  "validation": {
+    "invalidLink": true
+  },
+  "categoryOrder": [
+    "Core",
+    "Query",
+    "Management",
+    "Authentication",
+    "Error Handling",
+    "Logging"
+  ]
+}

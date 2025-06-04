@@ -1,0 +1,46 @@
+# Local test configuration
+config.json
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+
+# Compiled Dynamic libraries
+*.so
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+
+# The original file after running astyle:
+*.orig
+
+# Ignore some IDE-specific folder
+/.idea
+/.vscode
+
+# User folders
+*~
+
+# Build stuff
+/.lock-wscript
+/build/
+/node_modules/
+/docs/
+/test/CouchbaseMock.jar
+/builderror.log
+/configcache.txt
+/coverage/
+/benchmarks/
+/.nyc_output/
+/prebuilds/
+/deps/couchbase-cxx-cache
+*.tar.gz
+*.pem
+!/lib/nonProdCertificates/*.pem
+
+# Extra stuff
+/dist/
+/tools/bindings.json
