@@ -29,6 +29,7 @@ import { pipeline } from 'node:stream'
 import { RequestBehaviour, runWithRetry } from './retries'
 import {
   AnalyticsError,
+  DnsRecordsExhaustedError,
   ErrorContext,
   HttpLibraryError,
   HttpStatusError,
@@ -40,12 +41,14 @@ import { randomUUID } from 'node:crypto'
 import { Deserializer } from './deserializers'
 import { JsonTokenParserStream, PrimitiveFrame } from './jsonparser'
 import https from 'node:https'
+import { DnsClient } from './dnsclient'
 
 /**
  * @internal
  */
 export class QueryExecutor {
   private _cluster: Cluster
+  private _dnsClient: DnsClient
   private _databaseName: string | undefined
   private _scopeName: string | undefined
   private _metadata: QueryMetadata | undefined
@@ -65,6 +68,7 @@ export class QueryExecutor {
     scopeName?: string
   ) {
     this._cluster = cluster
+    this._dnsClient = new DnsClient(cluster.httpClient.hostname)
     this._databaseName = databaseName
     this._scopeName = scopeName
     this._deserializer = deserializer
@@ -154,6 +158,8 @@ export class QueryExecutor {
     deadline: number
   ): Promise<QueryResult> {
     this._errorContext.numAttempts++
+    requestOptions.hostname = await this._dnsClient.updateAndGetRandomRecord()
+
     return new Promise((resolve, reject) => {
       const abortHandler = () => {
         req.destroy()
@@ -176,7 +182,9 @@ export class QueryExecutor {
       req.on('error', (err) => {
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
-        reject(new HttpLibraryError(err, true))
+        reject(
+          new HttpLibraryError(err, true, requestOptions.hostname as string)
+        )
       })
 
       this._attachConnectTimeout(req)
@@ -274,7 +282,7 @@ export class QueryExecutor {
         socket.once('connect', clear)
       }
 
-      socket.once('error', clear)
+      socket.once('close', clear)
     })
   }
 
@@ -333,7 +341,6 @@ export class QueryExecutor {
    * @internal
    */
   _handleErrors(errs: any): RequestBehaviour {
-    this._errorContext.lastAttemptErrors = errs
     if (errs instanceof HttpStatusError) {
       if (errs.StatusCode === 401) {
         return RequestBehaviour.fail(
@@ -350,15 +357,22 @@ export class QueryExecutor {
       )
     } else if (errs instanceof TimeoutError) {
       return RequestBehaviour.fail(errs)
+    } else if (errs instanceof DnsRecordsExhaustedError) {
+      return RequestBehaviour.fail(
+        new AnalyticsError(
+          `Attempted to perform query on every resolved DNS record, but all of them failed to connect. ${this._errorContext.toString()}`
+        )
+      )
     } else if (errs instanceof HttpLibraryError) {
       if (this._isRetriableConnectionError(errs)) {
-        // TODO: rework connection retry mechanism
+        this._errorContext.previousAttemptErrors = errs
+        this._dnsClient.markRecordAsUsed(errs.DnsRecord as string)
         return RequestBehaviour.retry()
       }
 
       return RequestBehaviour.fail(
         new AnalyticsError(
-          'Got an error from the HTTP library, likely a network issue, details: ' +
+          'Got an unretriable error from the HTTP library, likely a network issue, details: ' +
             errs.Cause.message +
             `. ${this._errorContext.toString()}`
         )
@@ -400,6 +414,7 @@ export class QueryExecutor {
             )
           )
         } else if (firstRetriableError && !firstNonRetriableError) {
+          this._errorContext.previousAttemptErrors = errs
           return RequestBehaviour.retry()
         } else {
           return RequestBehaviour.fail(

@@ -116,11 +116,14 @@ export class HttpStatusError extends Error {
 export class HttpLibraryError extends Error {
   private cause: Error
   private request: boolean
-  constructor(err: Error, request: boolean) {
+  private dnsRecord?: string
+
+  constructor(err: Error, request: boolean, dnsRecord?: string) {
     super('HttpLibraryError')
     this.name = this.constructor.name
     this.cause = err
     this.request = request
+    this.dnsRecord = dnsRecord
   }
 
   /**
@@ -136,6 +139,23 @@ export class HttpLibraryError extends Error {
   get isRequestError(): boolean {
     return this.request
   }
+
+  /**
+   * @internal
+   */
+  get DnsRecord(): string | undefined {
+    return this.dnsRecord
+  }
+}
+
+/**
+ * @internal
+ */
+export class DnsRecordsExhaustedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = this.constructor.name
+  }
 }
 
 /**
@@ -147,7 +167,8 @@ export class ErrorContext {
   method: string | undefined
   statusCode: number | undefined
   statement: string | undefined
-  lastAttemptErrors: string[] | undefined
+  previousAttemptErrors: any
+  otherServerErrors: any[] | undefined
   numAttempts: number = 0
 
   /**
@@ -160,9 +181,11 @@ export class ErrorContext {
     if (this.path) parts.push(`path=${this.path}`)
     if (this.statusCode) parts.push(`statusCode=${this.statusCode}`)
     if (this.statement) parts.push(`statement=${this.statement}`)
-    if (this.lastAttemptErrors)
-      parts.push(`lastAttemptErrors=${this.lastAttemptErrors}`)
+    if (this.previousAttemptErrors)
+      parts.push(`previousAttemptErrors=${this.previousAttemptErrors}`)
     if (this.numAttempts) parts.push(`numAttempts=${this.numAttempts}`)
+    if (this.otherServerErrors)
+      parts.push(`otherServerErrors=${this.otherServerErrors}`)
     return `ErrorContext: ${parts.join(', ')}`
   }
 }

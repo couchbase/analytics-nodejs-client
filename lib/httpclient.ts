@@ -19,7 +19,6 @@ import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
 import { AnalyticsError } from './errors'
 import { Credential } from './credential'
-import dns from 'node:dns'
 import { SecurityOptions } from './cluster'
 import * as tls from 'node:tls'
 import { Certificates } from './certificates'
@@ -45,13 +44,10 @@ export class HttpClient {
     this._hostname = url.hostname
     this._auth = `${credential.username}:${credential.password}`
 
-    this.randomLookup = this.randomLookup.bind(this)
-
     if (url.protocol === 'http:') {
       this._port = url.port ?? '80'
       this._agent = new HttpAgent({
         keepAlive: false,
-        lookup: this.randomLookup,
       })
       this._module = http
     } else if (url.protocol === 'https:') {
@@ -59,7 +55,6 @@ export class HttpClient {
       const tlsOptions = this._buildTlsOptions(securityOptions)
       this._agent = new HttpsAgent({
         keepAlive: false,
-        lookup: this.randomLookup,
         ...tlsOptions,
       })
       this._module = https
@@ -83,7 +78,6 @@ export class HttpClient {
   genericRequestOptions(): http.RequestOptions {
     return {
       agent: this._agent,
-      hostname: this._hostname,
       port: this._port,
       auth: this._auth,
     }
@@ -102,6 +96,11 @@ export class HttpClient {
     securityOptions: SecurityOptions
   ): tls.ConnectionOptions {
     const tlsOptions: tls.ConnectionOptions = {}
+
+    // Override the server identity check to use the hostname rather than the DNS record
+    tlsOptions.checkServerIdentity = (_: string, cert: tls.PeerCertificate) => {
+      return tls.checkServerIdentity(this._hostname, cert)
+    }
 
     if (Object.keys(securityOptions).length === 0) {
       // By default, we trust the platform root certificates and the capella certs
@@ -139,32 +138,7 @@ export class HttpClient {
   /**
    * @internal
    */
-  randomLookup(
-    hostname: string,
-    options: dns.LookupOptions,
-    callback: (
-      err: NodeJS.ErrnoException | null,
-      address: string | dns.LookupAddress[],
-      family?: number
-    ) => void
-  ): void {
-    // There are two flavours of the callback signature. if 'all' is true: (err, address[]) else (err, address, family)
-    // On Node.js versions > 18, 'all' is true by default, which means we have to handle both cases.
-    // See https://github.com/nodejs/node/issues/55762
-    const wantAll = options.all
-    dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
-      if (err || addresses.length === 0) {
-        const e = err ?? new Error(`No addresses found for ${hostname}`)
-        return callback(e, wantAll ? [] : '', undefined)
-      }
-      const selectedAddress =
-        addresses[Math.floor(Math.random() * addresses.length)]
-
-      if (wantAll) {
-        callback(null, [selectedAddress])
-      } else {
-        callback(null, selectedAddress.address, selectedAddress.family)
-      }
-    })
+  get hostname(): string {
+    return this._hostname
   }
 }
