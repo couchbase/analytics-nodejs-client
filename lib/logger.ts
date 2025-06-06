@@ -16,9 +16,23 @@
  */
 
 /**
+ * @internal
+ */
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+/**
+ * @internal
+ */
+export const LOG_LEVELS: LogLevel[] = ['error', 'warn', 'info', 'debug']
+
+/**
  * Logger interface.
  */
 export interface Logger {
+  /**
+   * Logs at the debug level.
+   */
+  debug?(...args: any[]): void
   /**
    * Logs at the info level.
    */
@@ -31,10 +45,6 @@ export interface Logger {
    * Logs at the error level.
    */
   error?(...args: any[]): void
-  /**
-   * Logs at the debug level.
-   */
-  debug?(...args: any[]): void
 }
 
 /**
@@ -48,13 +58,23 @@ export const NOOP_LOGGER: Logger = {
 }
 
 /**
- * Console logger that uses console methods.
+ * @internal
  */
-export const CONSOLE_LOGGER: Logger = {
-  info: console.info.bind(console),
-  warn: console.warn.bind(console),
-  error: console.error.bind(console),
-  debug: console.debug.bind(console),
+export function createConsoleLogger(minLevel: LogLevel = 'info'): Logger {
+  const minPriority = LOG_LEVELS.indexOf(minLevel)
+
+  const makeLevel = (level: LogLevel, fn: (...args: any[]) => void) => {
+    return LOG_LEVELS.indexOf(level) <= minPriority
+      ? fn.bind(console)
+      : () => {}
+  }
+
+  return {
+    error: makeLevel('error', console.error),
+    warn: makeLevel('warn', console.warn),
+    info: makeLevel('info', console.info),
+    debug: makeLevel('debug', console.debug),
+  }
 }
 
 /**

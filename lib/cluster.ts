@@ -24,7 +24,14 @@ import { QueryExecutor } from './queryexecutor'
 import { HttpClient } from './httpclient'
 import { InvalidArgumentError } from './errors'
 import { ConnSpec } from './connspec'
-import { CouchbaseLogger, Logger, NOOP_LOGGER } from './logger'
+import {
+  CouchbaseLogger,
+  LOG_LEVELS,
+  Logger,
+  NOOP_LOGGER,
+  LogLevel,
+  createConsoleLogger,
+} from './logger'
 import { ParsingUtilities } from './utilities'
 
 /**
@@ -166,7 +173,13 @@ export class Cluster {
     }
 
     if (!options.logger) {
-      options.logger = NOOP_LOGGER
+      const envLogLevel = (
+        process.env.CBALOGLEVEL || ''
+      ).toLowerCase() as LogLevel
+
+      options.logger = LOG_LEVELS.includes(envLogLevel)
+        ? createConsoleLogger(envLogLevel)
+        : NOOP_LOGGER
     }
     CouchbaseLogger.set(options.logger)
 
