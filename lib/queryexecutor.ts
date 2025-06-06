@@ -372,7 +372,7 @@ export class QueryExecutor {
 
       return RequestBehaviour.fail(
         new AnalyticsError(
-          'Got an unretriable error from the HTTP library, likely a network issue, details: ' +
+          'Got an unretriable error from the HTTP library, details: ' +
             errs.Cause.message +
             `. ${this._errorContext.toString()}`
         )
@@ -382,50 +382,7 @@ export class QueryExecutor {
       return RequestBehaviour.fail(errs)
     } else if (Array.isArray(errs)) {
       // Server error array from query JSON response
-      let firstNonRetriableError: any = null
-      let firstRetriableError: any = null
-
-      for (const err of errs) {
-        const jsonErr = JSON.parse(err)
-        const retriable = 'retriable' in jsonErr ? jsonErr.retriable : false
-
-        if (!retriable && !firstNonRetriableError) {
-          firstNonRetriableError = jsonErr
-        }
-
-        if (retriable && !firstRetriableError) {
-          firstRetriableError = jsonErr
-        }
-      }
-
-      const selectedError = firstNonRetriableError || firstRetriableError
-
-      if (selectedError) {
-        if (selectedError.code === 20000) {
-          return RequestBehaviour.fail(
-            new InvalidCredentialError(
-              `Server response indicated invalid credentials. Server message: ${selectedError.msg}. Server error code: ${selectedError.code}. ${this._errorContext.toString()}`
-            )
-          )
-        } else if (selectedError.code === 21002) {
-          return RequestBehaviour.fail(
-            new TimeoutError(
-              `Server side timeout occurred. Server message: ${selectedError.msg}. Server error code: ${selectedError.code}. ${this._errorContext.toString()}`
-            )
-          )
-        } else if (firstRetriableError && !firstNonRetriableError) {
-          this._errorContext.previousAttemptErrors = errs
-          return RequestBehaviour.retry()
-        } else {
-          return RequestBehaviour.fail(
-            new QueryError(
-              `Server-side query error occurred. ${this._errorContext.toString()}`,
-              selectedError.msg || 'Unknown server error',
-              selectedError.code
-            )
-          )
-        }
-      }
+      return this._parseServerErrors(errs)
     }
 
     return RequestBehaviour.fail(
@@ -433,6 +390,74 @@ export class QueryExecutor {
         `Error received: ${String(errs)}. ${this._errorContext.toString()}`
       )
     )
+  }
+
+  private _parseServerErrors(errors: string[]): RequestBehaviour {
+    const addRemainingErrorsToContext = () => {
+      this._errorContext.otherServerErrors.push(
+        ...errors.filter((_, i) => parsedErrors[i] !== selectedError)
+      )
+    }
+
+    // Server error array from query JSON response
+    let firstNonRetriableError: any = null
+    let firstRetriableError: any = null
+
+    const parsedErrors = errors.map((err) => JSON.parse(err))
+
+    for (const jsonErr of parsedErrors) {
+      const retriable = 'retriable' in jsonErr ? jsonErr.retriable : false
+
+      if (!retriable && !firstNonRetriableError) {
+        firstNonRetriableError = jsonErr
+      }
+
+      if (retriable && !firstRetriableError) {
+        firstRetriableError = jsonErr
+      }
+    }
+
+    const selectedError = firstNonRetriableError || firstRetriableError
+
+    if (!selectedError) {
+      this._errorContext.otherServerErrors.push(...errors)
+      return RequestBehaviour.fail(
+        new AnalyticsError(
+          `Server returned an empty error array. ${this._errorContext.toString()}`
+        )
+      )
+    }
+
+    if (selectedError.code === 20000) {
+      addRemainingErrorsToContext()
+      this._errorContext.otherServerErrors.push(
+        ...errors.filter((_, i) => parsedErrors[i] !== selectedError)
+      )
+      return RequestBehaviour.fail(
+        new InvalidCredentialError(
+          `Server response indicated invalid credentials. Server message: ${selectedError.msg}. Server error code: ${selectedError.code}. ${this._errorContext.toString()}`
+        )
+      )
+    } else if (selectedError.code === 21002) {
+      addRemainingErrorsToContext()
+      return RequestBehaviour.fail(
+        new TimeoutError(
+          `Server side timeout occurred. Server message: ${selectedError.msg}. Server error code: ${selectedError.code}. ${this._errorContext.toString()}`
+        )
+      )
+    } else if (firstRetriableError && !firstNonRetriableError) {
+      this._errorContext.previousAttemptErrors = errors
+      return RequestBehaviour.retry()
+    } else {
+      addRemainingErrorsToContext()
+      return RequestBehaviour.fail(
+        new QueryError(
+          `Server-side query error occurred: Server message: ${selectedError.msg}. Server error code: ${selectedError.code}. ${this._errorContext.toString()}`,
+          selectedError.msg,
+          selectedError.code
+        )
+      )
+    }
   }
 
   /**

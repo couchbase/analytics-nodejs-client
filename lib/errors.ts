@@ -168,7 +168,7 @@ export class ErrorContext {
   statusCode: number | undefined
   statement: string | undefined
   previousAttemptErrors: any
-  otherServerErrors: any[] | undefined
+  otherServerErrors: any[] = []
   numAttempts: number = 0
 
   /**
@@ -184,7 +184,7 @@ export class ErrorContext {
     if (this.previousAttemptErrors)
       parts.push(`previousAttemptErrors=${this.previousAttemptErrors}`)
     if (this.numAttempts) parts.push(`numAttempts=${this.numAttempts}`)
-    if (this.otherServerErrors)
+    if (this.otherServerErrors.length > 0)
       parts.push(`otherServerErrors=${this.otherServerErrors}`)
     return `ErrorContext: ${parts.join(', ')}`
   }

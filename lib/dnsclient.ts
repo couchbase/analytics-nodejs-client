@@ -73,9 +73,7 @@ export class DnsClient {
     }
 
     const randomIndex = Math.floor(Math.random() * availableRecords.length)
-    const selectedRecord = availableRecords[randomIndex]
-
-    return selectedRecord
+    return availableRecords[randomIndex]
   }
 
   /**
