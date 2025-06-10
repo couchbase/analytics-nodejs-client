@@ -187,6 +187,13 @@ export class QueryExecutor {
         )
       })
 
+      req.on('connectTimeout', () => {
+        req.destroy()
+        this._signal.removeEventListener('abort', abortHandler)
+        // TODO TimeoutError will result in a 'fast-fail', do we instead want to retry with another DNS record?
+        reject(new TimeoutError(`Timed out connecting to ${req.host}`))
+      })
+
       this._attachConnectTimeout(req)
 
       req.write(body)
@@ -265,13 +272,7 @@ export class QueryExecutor {
       const timeoutMs = this._cluster.connectTimeout
 
       const timeoutId = setTimeout(() => {
-        req.destroy()
-        req.emit(
-          'error',
-          new TimeoutError(
-            `Timed out waiting for the connection. ${this._errorContext.toString()}`
-          )
-        )
+        req.emit('connectTimeout')
       }, timeoutMs)
 
       const clear = () => clearTimeout(timeoutId)
