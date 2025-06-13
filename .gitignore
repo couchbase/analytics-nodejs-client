@@ -40,6 +40,7 @@ config.json
 *.tar.gz
 *.pem
 !/lib/nonProdCertificates/*.pem
+!/lib/capellaCertificates/*.pem
 
 # Extra stuff
 /dist/
