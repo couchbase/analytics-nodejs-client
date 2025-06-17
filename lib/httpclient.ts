@@ -97,10 +97,8 @@ export class HttpClient {
   ): tls.ConnectionOptions {
     const tlsOptions: tls.ConnectionOptions = {}
 
-    // Override the server identity check to use the hostname rather than the DNS record
-    tlsOptions.checkServerIdentity = (_: string, cert: tls.PeerCertificate) => {
-      return tls.checkServerIdentity(this._hostname, cert)
-    }
+    // Override the servername to use the hostname rather than the DNS record
+    tlsOptions.servername = this._hostname
 
     if (Object.keys(securityOptions).length === 0) {
       // By default, we trust the platform root certificates and the capella certs
