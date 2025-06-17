@@ -213,7 +213,9 @@ export class QueryExecutor {
     })
 
     if (res.socket.remoteAddress)
-      this._errorContext.address = res.socket.remoteAddress
+      this._errorContext.lastDispatchedTo = res.socket.remoteAddress
+    if (res.socket.localAddress)
+      this._errorContext.lastDispatchedFrom = res.socket.localAddress
     if (res.statusCode) this._errorContext.statusCode = res.statusCode
 
     // TODO: Other HTTP status codes, 50X? Unsure if we are too eagerly assuming a valid response body

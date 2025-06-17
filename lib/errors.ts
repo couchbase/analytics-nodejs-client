@@ -162,7 +162,8 @@ export class DnsRecordsExhaustedError extends Error {
  * @internal
  */
 export class ErrorContext {
-  address: string | undefined
+  lastDispatchedTo: string | undefined
+  lastDispatchedFrom: string | undefined
   path: string | undefined
   method: string | undefined
   statusCode: number | undefined
@@ -176,7 +177,10 @@ export class ErrorContext {
    */
   toString(): string {
     const parts: string[] = []
-    if (this.address) parts.push(`address=${this.address}`)
+    if (this.lastDispatchedTo)
+      parts.push(`lastDispatchedTo=${this.lastDispatchedTo}`)
+    if (this.lastDispatchedFrom)
+      parts.push(`lastDispatchedFrom=${this.lastDispatchedFrom}`)
     if (this.method) parts.push(`method=${this.method}`)
     if (this.path) parts.push(`path=${this.path}`)
     if (this.statusCode) parts.push(`statusCode=${this.statusCode}`)
