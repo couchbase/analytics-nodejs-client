@@ -47,14 +47,14 @@ export class HttpClient {
     if (url.protocol === 'http:') {
       this._port = url.port ?? '80'
       this._agent = new HttpAgent({
-        keepAlive: false,
+        keepAlive: true,
       })
       this._module = http
     } else if (url.protocol === 'https:') {
       this._port = url.port ?? '443'
       const tlsOptions = this._buildTlsOptions(securityOptions)
       this._agent = new HttpsAgent({
-        keepAlive: false,
+        keepAlive: true,
         ...tlsOptions,
       })
       this._module = https
