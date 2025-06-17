@@ -174,7 +174,7 @@ export class Cluster {
 
     if (!options.logger) {
       const envLogLevel = (
-        process.env.CBALOGLEVEL || ''
+        process.env.NCBACLOGLEVEL || ''
       ).toLowerCase() as LogLevel
 
       options.logger = LOG_LEVELS.includes(envLogLevel)
