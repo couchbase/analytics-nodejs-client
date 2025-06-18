@@ -64,9 +64,7 @@ export class DnsClient {
    * @internal
    */
   getRandomRecord(): string {
-    const availableRecords = Array.from(this.availableRecords.entries())
-      .filter(([, used]) => !used)
-      .map(([address]) => address)
+    const availableRecords = this.getAvailableRecords()
 
     if (availableRecords.length === 0) {
       throw new DnsRecordsExhaustedError('No available DNS records found')
@@ -74,6 +72,15 @@ export class DnsClient {
 
     const randomIndex = Math.floor(Math.random() * availableRecords.length)
     return availableRecords[randomIndex]
+  }
+
+  /**
+   * @internal
+   */
+  getAvailableRecords(): string[] {
+    return Array.from(this.availableRecords.entries())
+      .filter(([, used]) => !used)
+      .map(([address]) => address)
   }
 
   /**
