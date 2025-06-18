@@ -26,36 +26,32 @@ import {
 import * as http from 'node:http'
 import { Parser, parser } from 'stream-json'
 import { pipeline } from 'node:stream'
-import { RequestBehaviour, runWithRetry } from './retries'
+import { runWithRetry } from './retries'
 import {
   AnalyticsError,
-  DnsRecordsExhaustedError,
-  ErrorContext,
   HttpLibraryError,
   HttpStatusError,
-  InvalidCredentialError,
-  QueryError,
   TimeoutError,
 } from './errors'
 import { randomUUID } from 'node:crypto'
 import { Deserializer } from './deserializers'
 import { JsonTokenParserStream, PrimitiveFrame } from './jsonparser'
 import https from 'node:https'
-import { DnsClient } from './dnsclient'
+import { RequestContext } from './requestcontext'
+import { ErrorHandler } from './errorhandler'
 
 /**
  * @internal
  */
 export class QueryExecutor {
   private _cluster: Cluster
-  private _dnsClient: DnsClient
+  private _requestContext: RequestContext
   private _databaseName: string | undefined
   private _scopeName: string | undefined
   private _metadata: QueryMetadata | undefined
   private _deserializer: Deserializer
   private _abortController: AbortController
   private _signal: AbortSignal
-  private _errorContext: ErrorContext
 
   /**
    * @internal
@@ -68,12 +64,11 @@ export class QueryExecutor {
     scopeName?: string
   ) {
     this._cluster = cluster
-    this._dnsClient = new DnsClient(cluster.httpClient.hostname)
     this._databaseName = databaseName
     this._scopeName = scopeName
     this._deserializer = deserializer
+    this._requestContext = new RequestContext(this._cluster.httpClient.hostname)
     this._abortController = new AbortController()
-    this._errorContext = new ErrorContext()
     this._signal = signal
       ? AbortSignal.any([this._abortController.signal, signal])
       : this._abortController.signal
@@ -100,8 +95,8 @@ export class QueryExecutor {
   /**
    * @internal
    */
-  get errorContext(): ErrorContext {
-    return this._errorContext
+  get requestContext(): RequestContext {
+    return this._requestContext
   }
 
   /**
@@ -111,10 +106,11 @@ export class QueryExecutor {
     const deadline =
       Date.now() + (options.timeout || this._cluster.queryTimeout)
 
-    this._errorContext.statement = `'${statement}'`
-    this._errorContext.path = '/api/v1/request'
-    this._errorContext.method = 'POST'
-
+    this._requestContext.setGenericRequestContextFields(
+      statement,
+      '/api/v1/request',
+      'POST'
+    )
     const encodedOptions = this._buildRequestOptions(statement, options)
     const body = JSON.stringify(encodedOptions)
 
@@ -133,13 +129,13 @@ export class QueryExecutor {
     try {
       res = await runWithRetry(
         () => this._attemptQuery(requestOptions, body, deadline),
-        (errs) => this._handleErrors(errs),
+        (errs) => ErrorHandler.handleErrors(errs, this._requestContext),
         deadline
       )
     } catch (error) {
       // Special case with TimeoutError, since it can come from a static context in runWithRetry, we attach the error context here.
       if (error instanceof TimeoutError) {
-        error.message = `${error.message}. ${this._errorContext.toString()}`
+        error.message = this._requestContext.createErrorMessage(error.message)
       }
       throw error
     }
@@ -157,8 +153,7 @@ export class QueryExecutor {
     body: string,
     deadline: number
   ): Promise<QueryResult> {
-    this._errorContext.numAttempts++
-    requestOptions.hostname = await this._dnsClient.updateAndGetRandomRecord()
+    requestOptions.hostname = this.requestContext.incrementAttemptAndGetRecord()
 
     return new Promise((resolve, reject) => {
       const abortHandler = () => {
@@ -212,11 +207,7 @@ export class QueryExecutor {
       return reject(new HttpLibraryError(err, false))
     })
 
-    if (res.socket.remoteAddress)
-      this._errorContext.lastDispatchedTo = res.socket.remoteAddress
-    if (res.socket.localAddress)
-      this._errorContext.lastDispatchedFrom = res.socket.localAddress
-    if (res.statusCode) this._errorContext.statusCode = res.statusCode
+    this._requestContext.updateGenericResContextFields(res)
 
     // TODO: Other HTTP status codes, 50X? Unsure if we are too eagerly assuming a valid response body
     if (res.statusCode === 401) {
@@ -232,7 +223,9 @@ export class QueryExecutor {
       res.destroy()
       reject(
         new AnalyticsError(
-          `Got an error parsing server JSON response, details: ${err.message}. ${this._errorContext.toString()}`
+          this._requestContext.createErrorMessage(
+            `Got an error parsing server JSON response, details: ${err.message}`
+          )
         )
       )
     })
@@ -259,7 +252,9 @@ export class QueryExecutor {
       if (err)
         return reject(
           new AnalyticsError(
-            `Error occurred during query pipeline: ${err.message}. ${this._errorContext.toString()}`
+            this._requestContext.createErrorMessage(
+              `Error occurred during query pipeline: ${err.message}`
+            )
           )
         )
     })
@@ -343,166 +338,12 @@ export class QueryExecutor {
   /**
    * @internal
    */
-  _handleErrors(errs: any): RequestBehaviour {
-    if (errs instanceof HttpStatusError) {
-      if (errs.StatusCode === 401) {
-        return RequestBehaviour.fail(
-          new InvalidCredentialError(
-            `Invalid credentials. ${this._errorContext.toString()}`
-          )
-        )
-      }
-
-      return RequestBehaviour.fail(
-        new AnalyticsError(
-          `Unhandled HTTP status error occurred: ${errs}. ${this._errorContext.toString()}`
-        )
-      )
-    } else if (errs instanceof TimeoutError) {
-      return RequestBehaviour.fail(errs)
-    } else if (errs instanceof DnsRecordsExhaustedError) {
-      return RequestBehaviour.fail(
-        new AnalyticsError(
-          `Attempted to perform query on every resolved DNS record, but all of them failed to connect. ${this._errorContext.toString()}`
-        )
-      )
-    } else if (errs instanceof HttpLibraryError) {
-      if (this._isRetriableConnectionError(errs)) {
-        this._errorContext.previousAttemptErrors = errs
-        this._dnsClient.markRecordAsUsed(errs.DnsRecord as string)
-        return RequestBehaviour.retry()
-      }
-
-      return RequestBehaviour.fail(
-        new AnalyticsError(
-          'Got an unretriable error from the HTTP library, details: ' +
-            errs.Cause.message +
-            `. ${this._errorContext.toString()}`
-        )
-      )
-    } else if (errs.name && errs.name === 'AbortError') {
-      // We consider AbortError a platform error so we don't wrap it in AnalyticsError
-      return RequestBehaviour.fail(errs)
-    } else if (Array.isArray(errs)) {
-      // Server error array from query JSON response
-      return this._parseServerErrors(errs)
-    }
-
-    return RequestBehaviour.fail(
-      new AnalyticsError(
-        `Error received: ${String(errs)}. ${this._errorContext.toString()}`
-      )
-    )
-  }
-
-  private _parseServerErrors(errors: string[]): RequestBehaviour {
-    const addRemainingErrorsToContext = () => {
-      this._errorContext.otherServerErrors.push(
-        ...errors.filter((_, i) => parsedErrors[i] !== selectedError)
-      )
-    }
-
-    // Server error array from query JSON response
-    let firstNonRetriableError: any = null
-    let firstRetriableError: any = null
-
-    const parsedErrors = errors.map((err) => JSON.parse(err))
-
-    for (const jsonErr of parsedErrors) {
-      const retriable = 'retriable' in jsonErr ? jsonErr.retriable : false
-
-      if (!retriable && !firstNonRetriableError) {
-        firstNonRetriableError = jsonErr
-      }
-
-      if (retriable && !firstRetriableError) {
-        firstRetriableError = jsonErr
-      }
-    }
-
-    const selectedError = firstNonRetriableError || firstRetriableError
-
-    if (!selectedError) {
-      this._errorContext.otherServerErrors.push(...errors)
-      return RequestBehaviour.fail(
-        new AnalyticsError(
-          `Server returned an empty error array. ${this._errorContext.toString()}`
-        )
-      )
-    }
-
-    if (selectedError.code === 20000) {
-      addRemainingErrorsToContext()
-      this._errorContext.otherServerErrors.push(
-        ...errors.filter((_, i) => parsedErrors[i] !== selectedError)
-      )
-      return RequestBehaviour.fail(
-        new InvalidCredentialError(
-          `Server response indicated invalid credentials. Server message: ${selectedError.msg}. Server error code: ${selectedError.code}. ${this._errorContext.toString()}`
-        )
-      )
-    } else if (selectedError.code === 21002) {
-      addRemainingErrorsToContext()
-      return RequestBehaviour.fail(
-        new TimeoutError(
-          `Server side timeout occurred. Server message: ${selectedError.msg}. Server error code: ${selectedError.code}. ${this._errorContext.toString()}`
-        )
-      )
-    } else if (firstRetriableError && !firstNonRetriableError) {
-      this._errorContext.previousAttemptErrors = errors
-      return RequestBehaviour.retry()
-    } else {
-      addRemainingErrorsToContext()
-      return RequestBehaviour.fail(
-        new QueryError(
-          `Server-side query error occurred: Server message: ${selectedError.msg}. Server error code: ${selectedError.code}. ${this._errorContext.toString()}`,
-          selectedError.msg,
-          selectedError.code
-        )
-      )
-    }
-  }
-
-  /**
-   * @internal
-   */
-  private _isRetriableConnectionError(error: HttpLibraryError): boolean {
-    // TODO: Figure out a more robust and correct way of determining if the error is a connection error. Perhaps something like what axios-retry does: https://github.com/softonic/axios-retry/blob/master/src/index.ts#L95
-    const nodeError = error.Cause as NodeJS.ErrnoException
-    if (!error.isRequestError || !nodeError || !nodeError.code) {
-      return false
-    }
-
-    return CONNECTION_ERROR_CODES.has(nodeError.code)
-  }
-
-  /**
-   * @internal
-   */
   handleAbort(): void {
     if (!this._signal.aborted) {
       this._abortController.abort()
     }
   }
 }
-
-/**
- * Taken from https://man7.org/linux/man-pages/man3/errno.3.html
- * @internal
- */
-const CONNECTION_ERROR_CODES = new Set([
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'ECONNABORTED',
-  'ETIMEDOUT',
-  'ENOTFOUND',
-  'ENETDOWN',
-  'ENETRESET',
-  'ENETUNREACH',
-  'EHOSTDOWN',
-  'EHOSTUNREACH',
-  'EPIPE',
-])
 
 /**
  * @internal
