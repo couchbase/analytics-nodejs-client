@@ -21,6 +21,7 @@ import {
   DnsRecordsExhaustedError,
   HttpLibraryError,
   HttpStatusError,
+  InternalConnectionTimeout,
   InvalidCredentialError,
   QueryError,
   TimeoutError,
@@ -49,12 +50,23 @@ export class ErrorHandler {
       return RequestBehaviour.fail(
         new AnalyticsError(
           context.createErrorMessage(
-            `Unhalded HTTP status error occurred: ${errs}`
+            `Unhandled HTTP status error occurred: ${errs}`
           )
         )
       )
     } else if (errs instanceof TimeoutError) {
       return RequestBehaviour.fail(errs)
+    } else if (errs instanceof InternalConnectionTimeout) {
+      context.markRecordAsUsed(errs.DnsRecord)
+      if (context.recordsExhausted()) {
+        return RequestBehaviour.fail(
+          new TimeoutError(
+            'Timed out attempting to connect to all available DNS records'
+          )
+        )
+      }
+      context.setPreviousAttemptErrors(errs)
+      return RequestBehaviour.retry()
     } else if (errs instanceof DnsRecordsExhaustedError) {
       return RequestBehaviour.fail(
         new AnalyticsError(

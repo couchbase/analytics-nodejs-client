@@ -48,6 +48,13 @@ export class RequestContext {
   /**
    * @internal
    */
+  recordsExhausted(): boolean {
+    return this._dnsClient.getAvailableRecords().length === 0
+  }
+
+  /**
+   * @internal
+   */
   updateGenericResContextFields(res: http.IncomingMessage): void {
     if (res.socket.remoteAddress)
       this.errorContext.lastDispatchedTo = res.socket.remoteAddress

@@ -87,6 +87,26 @@ export class InvalidArgumentError extends Error {
 }
 
 /**
+ * Indicates that we failed to connect to a node within the timeout period.
+ *
+ * @internal
+ */
+export class InternalConnectionTimeout extends Error {
+  private dnsRecord: string
+  constructor(dnsRecord: string) {
+    super('Timed out waiting to connect to node')
+    this.dnsRecord = dnsRecord
+  }
+
+  /**
+   * @internal
+   */
+  get DnsRecord(): string {
+    return this.dnsRecord
+  }
+}
+
+/**
  * Internal wrapper to indicate that the server returned an errored status code.
  *
  * @internal

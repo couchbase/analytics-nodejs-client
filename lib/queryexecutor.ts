@@ -31,6 +31,7 @@ import {
   AnalyticsError,
   HttpLibraryError,
   HttpStatusError,
+  InternalConnectionTimeout,
   TimeoutError,
 } from './errors'
 import { randomUUID } from 'node:crypto'
@@ -185,8 +186,7 @@ export class QueryExecutor {
       req.on('connectTimeout', () => {
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
-        // TODO TimeoutError will result in a 'fast-fail', do we instead want to retry with another DNS record?
-        reject(new TimeoutError(`Timed out connecting to ${req.host}`))
+        reject(new InternalConnectionTimeout(requestOptions.hostname as string))
       })
 
       this._attachConnectTimeout(req)
