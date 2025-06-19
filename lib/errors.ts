@@ -133,13 +133,13 @@ export class HttpStatusError extends Error {
  *
  * @internal
  */
-export class HttpLibraryError extends Error {
+export class ConnectionError extends Error {
   private cause: Error
   private request: boolean
   private dnsRecord?: string
 
   constructor(err: Error, request: boolean, dnsRecord?: string) {
-    super('HttpLibraryError')
+    super('ConnectionError')
     this.name = this.constructor.name
     this.cause = err
     this.request = request

@@ -17,7 +17,7 @@
 
 import dns from 'node:dns'
 import { CouchbaseLogger } from './logger'
-import { DnsRecordsExhaustedError } from './errors'
+import { ConnectionError, DnsRecordsExhaustedError } from './errors'
 
 /**
  * @internal
@@ -50,7 +50,14 @@ export class DnsClient {
       CouchbaseLogger.error(
         `DNS lookup failed for ${this.hostname}: ${err?.message || 'Unknown error'}`
       )
-      return
+      throw new ConnectionError(err, true)
+    }
+
+    if (addresses.length === 0) {
+      throw new ConnectionError(
+        new Error(`No DNS records found for ${this.hostname}`),
+        true
+      )
     }
 
     for (const address of addresses) {
@@ -58,6 +65,16 @@ export class DnsClient {
         this.availableRecords.set(address.address, false)
       }
     }
+  }
+
+  /**
+   * @internal
+   */
+  async maybeUpdateDnsRecords(): Promise<void> {
+    if (this.availableRecords.size > 0) {
+      return
+    }
+    await this.updateDnsRecords()
   }
 
   /**
@@ -86,8 +103,8 @@ export class DnsClient {
   /**
    * @internal
    */
-  async updateAndGetRandomRecord(): Promise<string> {
-    await this.updateDnsRecords()
+  async maybeUpdateAndGetRandomRecord(): Promise<string> {
+    await this.maybeUpdateDnsRecords()
     return this.getRandomRecord()
   }
 

@@ -29,7 +29,7 @@ import { pipeline } from 'node:stream'
 import { runWithRetry } from './retries'
 import {
   AnalyticsError,
-  HttpLibraryError,
+  ConnectionError,
   HttpStatusError,
   InternalConnectionTimeout,
   TimeoutError,
@@ -154,7 +154,8 @@ export class QueryExecutor {
     body: string,
     deadline: number
   ): Promise<QueryResult> {
-    requestOptions.hostname = this.requestContext.incrementAttemptAndGetRecord()
+    requestOptions.hostname =
+      await this.requestContext.incrementAttemptAndGetRecord()
 
     return new Promise((resolve, reject) => {
       const abortHandler = () => {
@@ -179,7 +180,7 @@ export class QueryExecutor {
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
         reject(
-          new HttpLibraryError(err, true, requestOptions.hostname as string)
+          new ConnectionError(err, true, requestOptions.hostname as string)
         )
       })
 
@@ -204,7 +205,7 @@ export class QueryExecutor {
   ): void {
     res.once('error', (err) => {
       res.destroy()
-      return reject(new HttpLibraryError(err, false))
+      return reject(new ConnectionError(err, false))
     })
 
     this._requestContext.updateGenericResContextFields(res)

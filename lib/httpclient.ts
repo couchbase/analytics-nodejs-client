@@ -100,6 +100,8 @@ export class HttpClient {
     // Override the servername to use the hostname rather than the DNS record
     tlsOptions.servername = this._hostname
 
+    tlsOptions.minVersion = 'TLSv1.3'
+
     if (Object.keys(securityOptions).length === 0) {
       // By default, we trust the platform root certificates and the capella certs
       tlsOptions.ca = [
