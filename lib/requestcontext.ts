@@ -33,9 +33,9 @@ export class RequestContext {
   /**
    * @internal
    */
-  incrementAttemptAndGetRecord(): string {
+  async incrementAttemptAndGetRecord(): Promise<string> {
     this.incrementAttempt()
-    return this._dnsClient.getRandomRecord()
+    return await this._dnsClient.maybeUpdateAndGetRandomRecord()
   }
 
   /**
