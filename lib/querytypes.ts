@@ -89,7 +89,7 @@ export class QueryResultStream extends Transform {
         this.emit(
           'error',
           new TimeoutError(
-            this.executor.requestContext.createErrorMessage('Query timed out')
+            this.executor.requestContext.attachErrorContext('Query timed out')
           )
         )
       )
@@ -98,7 +98,7 @@ export class QueryResultStream extends Transform {
         this.emit(
           'error',
           new TimeoutError(
-            this.executor.requestContext.createErrorMessage(
+            this.executor.requestContext.attachErrorContext(
               'Query timed out during stream'
             )
           )

@@ -93,7 +93,7 @@ export class RequestContext {
   /**
    * @internal
    */
-  createErrorMessage(message: string): string {
+  attachErrorContext(message: string): string {
     return `${message}. ${this._errorContext.toString()}`
   }
 }

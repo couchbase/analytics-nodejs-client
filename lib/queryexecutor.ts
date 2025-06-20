@@ -39,6 +39,7 @@ import { JsonTokenParserStream, PrimitiveFrame } from './jsonparser'
 import https from 'node:https'
 import { RequestContext } from './requestcontext'
 import { ErrorHandler } from './errorhandler'
+import { CouchbaseLogger } from './logger'
 
 /**
  * @internal
@@ -52,6 +53,7 @@ export class QueryExecutor {
   private _deserializer: Deserializer
   private _abortController: AbortController
   private _signal: AbortSignal
+  private _clientContextId: string | undefined
 
   /**
    * @internal
@@ -74,6 +76,9 @@ export class QueryExecutor {
       : this._abortController.signal
 
     this._signal.addEventListener('abort', () => {
+      CouchbaseLogger.debug(
+        `Query was aborted. clientContextId=${this._clientContextId}`
+      )
       this.handleAbort()
     })
   }
@@ -156,6 +161,9 @@ export class QueryExecutor {
       const req = this._cluster.httpClient.module.request(
         requestOptions,
         (res) => {
+          CouchbaseLogger.debug(
+            `Received query response from ${requestOptions.hostname}:${requestOptions.port}. statusCode=${res.statusCode} clientContextId=${this._clientContextId}`
+          )
           this._handleResponse(res, resolve, reject, deadline)
         }
       )
@@ -165,6 +173,9 @@ export class QueryExecutor {
       })
 
       req.on('error', (err) => {
+        CouchbaseLogger.error(
+          `Error occurred while sending query request to ${requestOptions.hostname}:${requestOptions.port}, details: ${err.message}. clientContextId=${this._clientContextId}`
+        )
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
         reject(
@@ -173,12 +184,19 @@ export class QueryExecutor {
       })
 
       req.on('connectTimeout', () => {
+        CouchbaseLogger.error(
+          `Connection timeout for query request to ${requestOptions.hostname}:${requestOptions.port}. clientContextId=${this._clientContextId}`
+        )
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
         reject(new InternalConnectionTimeout(requestOptions.hostname as string))
       })
 
       this._attachConnectTimeout(req)
+
+      CouchbaseLogger.debug(
+        `Sending request to ${requestOptions.hostname}:${requestOptions.port}. body=${body}. clientContextId=${this._clientContextId}`
+      )
 
       req.write(body)
       req.end()
@@ -192,6 +210,9 @@ export class QueryExecutor {
     deadline: number
   ): void {
     res.once('error', (err) => {
+      CouchbaseLogger.error(
+        `Error occurred while receiving query response from ${res.socket.remoteAddress}:${res.socket.remotePort}, details: ${err.message}. clientContextId=${this._clientContextId}`
+      )
       res.destroy()
       return reject(new ConnectionError(err, false))
     })
@@ -212,7 +233,7 @@ export class QueryExecutor {
       res.destroy()
       reject(
         new AnalyticsError(
-          this._requestContext.createErrorMessage(
+          this._requestContext.attachErrorContext(
             `Got an error parsing server JSON response, details: ${err.message}`
           )
         )
@@ -231,6 +252,9 @@ export class QueryExecutor {
 
     jsonTokenParser.once('errorsComplete', (errors) => {
       if (errors.length) {
+        CouchbaseLogger.error(
+          `Server query errors received: ${JSON.stringify(errors)}. clientContextId=${this._clientContextId}`
+        )
         res.destroy()
         queryStream.destroy()
         return reject(errors)
@@ -241,7 +265,7 @@ export class QueryExecutor {
       if (err)
         return reject(
           new AnalyticsError(
-            this._requestContext.createErrorMessage(
+            this._requestContext.attachErrorContext(
               `Error occurred during query pipeline: ${err.message}`
             )
           )
@@ -284,6 +308,7 @@ export class QueryExecutor {
       statement: statement,
       client_context_id: options.clientContextId || randomUUID(),
     }
+    this._clientContextId = opts.client_context_id
 
     if (this._databaseName && this._scopeName) {
       opts.query_context = `default:\`${this._databaseName}\`.\`${this._scopeName}\``
