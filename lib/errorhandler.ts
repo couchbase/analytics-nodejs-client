@@ -42,14 +42,14 @@ export class ErrorHandler {
       if (errs.StatusCode === 401) {
         return RequestBehaviour.fail(
           new InvalidCredentialError(
-            context.createErrorMessage('Invalid credentials')
+            context.attachErrorContext('Invalid credentials')
           )
         )
       }
 
       return RequestBehaviour.fail(
         new AnalyticsError(
-          context.createErrorMessage(
+          context.attachErrorContext(
             `Unhandled HTTP status error occurred: ${errs}`
           )
         )
@@ -70,7 +70,7 @@ export class ErrorHandler {
     } else if (errs instanceof DnsRecordsExhaustedError) {
       return RequestBehaviour.fail(
         new AnalyticsError(
-          context.createErrorMessage(
+          context.attachErrorContext(
             'Attempted to perform query on every resolved DNS record, but all of them failed to connect.'
           )
         )
@@ -84,7 +84,7 @@ export class ErrorHandler {
 
       return RequestBehaviour.fail(
         new AnalyticsError(
-          context.createErrorMessage(
+          context.attachErrorContext(
             `Got an unretriable error from the HTTP library, details: ${errs.Cause.message}`
           )
         )
@@ -99,7 +99,7 @@ export class ErrorHandler {
 
     return RequestBehaviour.fail(
       new AnalyticsError(
-        context.createErrorMessage(`Error received: ${String(errs)}`)
+        context.attachErrorContext(`Error received: ${String(errs)}`)
       )
     )
   }
@@ -141,7 +141,7 @@ export class ErrorHandler {
       context.pushOtherServerErrors(...errors)
       return RequestBehaviour.fail(
         new AnalyticsError(
-          context.createErrorMessage('Server returned an empty error array')
+          context.attachErrorContext('Server returned an empty error array')
         )
       )
     }
@@ -154,7 +154,7 @@ export class ErrorHandler {
 
       return RequestBehaviour.fail(
         new InvalidCredentialError(
-          context.createErrorMessage(
+          context.attachErrorContext(
             `Server response indicated invalid credentials. Server message: ${selectedError.msg}. Server error code: ${selectedError.code}`
           )
         )
@@ -163,7 +163,7 @@ export class ErrorHandler {
       addRemainingErrorsToContext()
       return RequestBehaviour.fail(
         new TimeoutError(
-          context.createErrorMessage(
+          context.attachErrorContext(
             `Server side timeout occurred. Server message: ${selectedError.msg}. Server error code: ${selectedError.code}`
           )
         )
@@ -175,7 +175,7 @@ export class ErrorHandler {
       addRemainingErrorsToContext()
       return RequestBehaviour.fail(
         new QueryError(
-          context.createErrorMessage(
+          context.attachErrorContext(
             `Server-side query error occurred: Server message: ${selectedError.msg}. Server error code: ${selectedError.code}`
           ),
           selectedError.msg,

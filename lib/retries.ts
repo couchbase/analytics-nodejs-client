@@ -81,7 +81,7 @@ export async function runWithRetry<T>(
     const remainingTime = deadline - Date.now()
     if (remainingTime <= 0) {
       throw new TimeoutError(
-        requestContext.createErrorMessage('Query timeout exceeded during retry')
+        requestContext.attachErrorContext('Query timeout exceeded during retry')
       )
     }
 
@@ -93,7 +93,7 @@ export async function runWithRetry<T>(
         const delay = calculateBackoff(attempt)
         if (Date.now() + delay > deadline) {
           throw new TimeoutError(
-            requestContext.createErrorMessage(
+            requestContext.attachErrorContext(
               'Query timeout will exceed during retry backoff'
             )
           )
