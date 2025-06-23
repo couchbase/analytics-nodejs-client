@@ -17,6 +17,7 @@
 
 import { PromiseHelper } from './utilities'
 import { TimeoutError } from './errors'
+import { RequestContext } from './requestcontext'
 
 /**
  * Represents the behaviour of a request during retries.
@@ -66,18 +67,22 @@ export class RequestBehaviour {
  * @param fn The function to execute, which returns a Promise.
  * @param evaluate A function that evaluates the error and returns a RequestBehaviour indicating whether to retry or fail.
  * @param deadline The deadline timestamp by which the operation must complete.
+ * @param requestContext The context for the request, used for error messages.
  */
 export async function runWithRetry<T>(
   fn: () => Promise<T>,
   evaluate: (errs: any) => RequestBehaviour,
-  deadline: number
+  deadline: number,
+  requestContext: RequestContext
 ): Promise<T> {
   let attempt = 0
   for (;;) {
     attempt++
     const remainingTime = deadline - Date.now()
     if (remainingTime <= 0) {
-      throw new TimeoutError('Query timeout exceeded during retry')
+      throw new TimeoutError(
+        requestContext.createErrorMessage('Query timeout exceeded during retry')
+      )
     }
 
     try {
@@ -88,7 +93,9 @@ export async function runWithRetry<T>(
         const delay = calculateBackoff(attempt)
         if (Date.now() + delay > deadline) {
           throw new TimeoutError(
-            'Query timeout will exceed during retry backoff'
+            requestContext.createErrorMessage(
+              'Query timeout will exceed during retry backoff'
+            )
           )
         }
         await sleep(delay)

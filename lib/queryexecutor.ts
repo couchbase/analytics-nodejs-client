@@ -32,7 +32,6 @@ import {
   ConnectionError,
   HttpStatusError,
   InternalConnectionTimeout,
-  TimeoutError,
 } from './errors'
 import { randomUUID } from 'node:crypto'
 import { Deserializer } from './deserializers'
@@ -125,22 +124,12 @@ export class QueryExecutor {
       },
     }
 
-    let res
-    try {
-      res = await runWithRetry(
-        () => this._attemptQuery(requestOptions, body, deadline),
-        (errs) => ErrorHandler.handleErrors(errs, this._requestContext),
-        deadline
-      )
-    } catch (error) {
-      // Special case with TimeoutError, since it can come from a static context in runWithRetry, we attach the error context here.
-      if (error instanceof TimeoutError) {
-        error.message = this._requestContext.createErrorMessage(error.message)
-      }
-      throw error
-    }
-
-    return res
+    return await runWithRetry(
+      () => this._attemptQuery(requestOptions, body, deadline),
+      (errs) => ErrorHandler.handleErrors(errs, this._requestContext),
+      deadline,
+      this._requestContext
+    )
   }
 
   /**
