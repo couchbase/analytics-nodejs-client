@@ -322,11 +322,6 @@ export interface QueryOptions {
   scanConsistency?: QueryScanConsistency
 
   /**
-   * Indicates whether this query should be executed with a specific priority level.
-   */
-  priority?: boolean
-
-  /**
    * Indicates whether this query should be executed in read-only mode.
    */
   readOnly?: boolean

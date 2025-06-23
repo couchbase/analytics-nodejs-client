@@ -122,7 +122,6 @@ export class QueryExecutor {
       headers: {
         'Content-Length': Buffer.byteLength(body),
         'Content-Type': 'application/json',
-        ...(options.priority ? { 'Analytics-Priority': '-1' } : {}),
       },
     }
 
