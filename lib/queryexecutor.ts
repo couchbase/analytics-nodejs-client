@@ -27,12 +27,12 @@ import * as http from 'node:http'
 import { Parser, parser } from 'stream-json'
 import { pipeline } from 'node:stream'
 import { runWithRetry } from './retries'
+import { AnalyticsError } from './errors'
 import {
-  AnalyticsError,
   ConnectionError,
   HttpStatusError,
   InternalConnectionTimeout,
-} from './errors'
+} from './internalerrors'
 import { randomUUID } from 'node:crypto'
 import { Deserializer } from './deserializers'
 import { JsonTokenParserStream, PrimitiveFrame } from './jsonparser'

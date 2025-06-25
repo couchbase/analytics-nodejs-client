@@ -17,7 +17,7 @@
 
 import dns from 'node:dns'
 import { CouchbaseLogger } from './logger'
-import { ConnectionError, DnsRecordsExhaustedError } from './errors'
+import { ConnectionError, DnsRecordsExhaustedError } from './internalerrors'
 
 /**
  * @internal

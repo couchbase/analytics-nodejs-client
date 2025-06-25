@@ -18,14 +18,16 @@
 import { RequestContext } from './requestcontext'
 import {
   AnalyticsError,
-  ConnectionError,
-  DnsRecordsExhaustedError,
-  HttpStatusError,
-  InternalConnectionTimeout,
   InvalidCredentialError,
   QueryError,
   TimeoutError,
 } from './errors'
+import {
+  ConnectionError,
+  DnsRecordsExhaustedError,
+  HttpStatusError,
+  InternalConnectionTimeout,
+} from './internalerrors'
 import { RequestBehaviour } from './retries'
 
 /**

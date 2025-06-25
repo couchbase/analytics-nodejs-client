@@ -1,5 +1,5 @@
 import { DnsClient } from './dnsclient'
-import { ErrorContext } from './errors'
+import { ErrorContext } from './internalerrors'
 import http from 'node:http'
 
 /**
