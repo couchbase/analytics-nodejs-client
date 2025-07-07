@@ -15,16 +15,11 @@
  *  limitations under the License.
  */
 
-'use strict'
-
-const assert = require('chai').assert
-var { ConnSpec } = require('../lib/connspec')
-
-const harness = require('./harness')
-const { CouchbaseLogger } = require('../lib/logger')
-const { ParsingUtilities } = require('../lib/utilities')
-
-const H = harness
+import { assert } from 'chai'
+import { ConnSpec } from '../lib/connspec.js'
+import { harness } from './harness.js'
+import { CouchbaseLogger } from '../lib/logger.js'
+import { ParsingUtilities } from '../lib/utilities.js'
 
 describe('#ConnSpec', function () {
   describe('stringify', function () {
@@ -41,9 +36,9 @@ describe('#ConnSpec', function () {
     })
 
     it('should log a warning on unsupported parameters', function () {
-      const messages = []
-      let logger = {
-        warn(...args) {
+      const messages: string[] = []
+      const logger = {
+        warn(...args: string[]) {
           messages.push(...args)
         },
       }
@@ -60,7 +55,7 @@ describe('#ConnSpec', function () {
     })
 
     it('should parse duration values correctly', function () {
-      const validDurations = [
+      const validDurations: [string, number][] = [
         ['0', 0],
         ['0s', 0],
         ['1h', 3.6e6],
@@ -96,7 +91,7 @@ describe('#ConnSpec', function () {
     })
 
     it('should fail parsing invalid duration values', async function () {
-      const invalidDurations = [
+      const invalidDurations: string[] = [
         '',
         '10',
         '10Gs',
@@ -112,8 +107,8 @@ describe('#ConnSpec', function () {
       ]
 
       for (const duration of invalidDurations) {
-        await H.throwsHelper(() => {
-          ParsingUtilities.parseGolangSyntaxDuration(duration)
+        await harness.throwsHelper(() => {
+          return Promise.resolve(ParsingUtilities.parseGolangSyntaxDuration(duration))
         }, Error)
       }
     })

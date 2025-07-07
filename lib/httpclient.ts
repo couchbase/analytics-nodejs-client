@@ -17,15 +17,15 @@
 
 import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
-import { AnalyticsError } from './errors'
-import { Credential } from './credential'
-import { SecurityOptions } from './cluster'
+import { AnalyticsError } from './errors.js'
+import { Credential } from './credential.js'
+import { SecurityOptions } from './cluster.js'
+import { Certificates } from './certificates.js'
 import * as tls from 'node:tls'
-import { Certificates } from './certificates'
-import fs from 'fs'
-import http from 'node:http'
-import https from 'node:https'
-import dns from 'node:dns'
+import * as fs from 'fs'
+import * as http from 'node:http'
+import * as https from 'node:https'
+import * as dns from 'node:dns'
 
 /**
  * @internal

@@ -15,16 +15,27 @@
  *  limitations under the License.
  */
 
-'use strict'
+import { assert } from 'chai'
+import * as fs from 'fs'
+import * as ini from 'ini'
+import * as path from 'path'
+import * as semver from 'semver'
+import * as crypto from 'crypto'
 
-const assert = require('chai').assert
-const fs = require('fs')
-const ini = require('ini')
-const path = require('path')
-const semver = require('semver')
-const analytics = require('../lib/analytics')
-const crypto = require('crypto')
-const { Credential } = require('../lib/credential')
+import {
+  Cluster,
+  Database,
+  Scope,
+  Credential,
+  ClusterOptions,
+  createInstance,
+  Certificates,
+
+} from '../lib/analytics.js'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const TEST_CONFIG_INI = path.join(
   path.resolve(__dirname, '..'),
@@ -32,16 +43,44 @@ const TEST_CONFIG_INI = path.join(
   'testConfig.ini'
 )
 
-const ServerFeatures = {}
+const ServerFeatures: Record<string, any> = {}
+
+interface Feature {
+  feature: string
+  enabled: boolean | undefined
+}
+
+interface TestConfig {
+  connstr?: string
+  version: ServerVersion
+  database: string
+  scope: string
+  collection: string
+  user?: string
+  pass?: string
+  nonprod: boolean
+  disableCertVerification: boolean
+  features: Feature[]
+}
+
+interface ConnectionOptions {
+  username?: string
+  password?: string
+  connstr?: string
+}
 
 class ServerVersion {
-  constructor(major, minor, patch) {
+  major: number
+  minor: number
+  patch: number
+
+  constructor(major: number, minor: number, patch: number) {
     this.major = major
     this.minor = minor
     this.patch = patch
   }
 
-  isAtLeast(major, minor, patch) {
+  isAtLeast(major: number, minor: number, patch: number): boolean {
     if (this.major === 0 && this.minor === 0 && this.patch === 0) {
       // if no version is provided, assume latest
       return true
@@ -63,20 +102,17 @@ class ServerVersion {
   }
 }
 
-var TEST_CONFIG = {
-  connstr: undefined,
+const TEST_CONFIG: TestConfig = {
   version: new ServerVersion(0, 0, 0),
   database: 'Default',
   scope: 'Default',
   collection: 'Default',
-  user: undefined,
-  pass: undefined,
   nonprod: true,
   disableCertVerification: false,
   features: [],
 }
 
-let configIni
+let configIni: any
 try {
   configIni = ini.parse(fs.readFileSync(TEST_CONFIG_INI, 'utf-8'))
 } catch (e) {
@@ -91,18 +127,18 @@ if (configIni && configIni.connstr !== undefined) {
 
 if ((configIni && configIni.version) || process.env.NCBACCVER !== undefined) {
   assert(!!TEST_CONFIG.connstr, 'must not specify a version without a connstr')
-  var ver = configIni.version || process.env.NCBACCVER
-  var major = semver.major(ver)
-  var minor = semver.minor(ver)
-  var patch = semver.patch(ver)
+  const ver = configIni?.version || process.env.NCBACCVER || ''
+  const major = semver.major(ver)
+  const minor = semver.minor(ver)
+  const patch = semver.patch(ver)
   TEST_CONFIG.version = new ServerVersion(major, minor, patch)
 }
 
-let fqdnTokens = []
+let fqdnTokens: string[] = []
 if (configIni && configIni.fqdn !== undefined) {
   fqdnTokens = configIni.fqdn.split('.')
 } else if (process.env.NCBACFQDN !== undefined) {
-  fqdnTokens = process.env.NCBACFQDN.split('.')
+  fqdnTokens = process.env.NCBACFQDN!.split('.')
 }
 
 if (fqdnTokens.length > 0) {
@@ -129,21 +165,21 @@ if (configIni && configIni.password !== undefined) {
 if (configIni && configIni.nonprod !== undefined) {
   TEST_CONFIG.nonprod = configIni.nonprod
 } else if (process.env.NCBACNONPROD !== undefined) {
-  TEST_CONFIG.nonprod = process.env.NCBACNONPROD
+  TEST_CONFIG.nonprod = process.env.NCBACNONPROD === 'true'
 }
 
 if (configIni && configIni.disable_cert_verification !== undefined) {
   TEST_CONFIG.disableCertVerification = configIni.disable_cert_verification
 } else if (process.env.NCBACDISABLECERTVERIFICATION !== undefined) {
-  TEST_CONFIG.disableCertVerification = process.env.NCBACDISABLECERTVERIFICATION
+  TEST_CONFIG.disableCertVerification = process.env.NCBACDISABLECERTVERIFICATION === 'true'
 }
 
 if ((configIni && configIni.features) || process.env.NCBACFEAT !== undefined) {
-  var featureStrs = (configIni.features || process.env.NCBACFEAT).split(',')
-  featureStrs.forEach((featureStr) => {
-    var featureName = featureStr.substr(1)
+  const featureStrs = (configIni?.features || process.env.NCBACFEAT || '').split(',')
+  featureStrs.forEach((featureStr: string) => {
+    const featureName = featureStr.substr(1)
 
-    var featureEnabled = undefined
+    let featureEnabled: boolean | undefined = undefined
     if (featureStr[0] === '+') {
       featureEnabled = true
     } else if (featureStr[0] === '-') {
@@ -158,7 +194,23 @@ if ((configIni && configIni.features) || process.env.NCBACFEAT !== undefined) {
 }
 
 class Harness {
-  get Features() {
+  private _connstr?: string
+  private _version: ServerVersion
+  private _database: string
+  private _scope: string
+  private _collection: string
+  private _user?: string
+  private _pass?: string
+  private _nonprod: boolean
+  private _disableCertVerification: boolean
+  private _integrationEnabled: boolean
+  private _testKey: string
+  private _testCtr: number
+  private _testCluster: Cluster | null
+  private _testDatabase: Database | null
+  private _testScope: Scope | null
+
+  get Features(): Record<string, any> {
     return ServerFeatures
   }
 
@@ -189,46 +241,44 @@ class Harness {
     this._testScope = null
   }
 
-  get connStr() {
+  get connStr(): string | undefined {
     return this._connstr
   }
 
-  get databaseName() {
+  get databaseName(): string {
     return this._database
   }
 
-  get scopeName() {
+  get scopeName(): string {
     return this._scope
   }
 
-  get collectionName() {
+  get collectionName(): string {
     return this._collection
   }
 
-  get fqdn() {
+  get fqdn(): string {
     return `\`${this._database}\`.\`${this._scope}\`.\`${this._collection}\``
   }
 
-  get integrationEnabled() {
+  get integrationEnabled(): boolean {
     return this._integrationEnabled
   }
 
-  get credentials() {
+  get credentials(): Credential {
     return new Credential(this._user, this._pass)
   }
 
-  get nonprod() {
+  get nonprod(): boolean {
     return this._nonprod
   }
 
-  get disableCertVerification() {
+  get disableCertVerification(): boolean {
     return this._disableCertVerification
   }
 
-  async throwsHelper(fn) {
-    var assertArgs = Array.from(arguments).slice(1)
-
-    var savedErr = null
+  async throwsHelper<T>(fn: () => T, ...assertArgs: any[]): Promise<void> {
+    let savedErr = null
     try {
       await fn()
     } catch (err) {
@@ -245,18 +295,18 @@ class Harness {
     )
   }
 
-  assertisFalse() {
+  assertisFalse(): void {
     assert.isTrue(false)
   }
 
-  genTestKey() {
+  genTestKey(): string {
     return this._testKey + '_' + this._testCtr++
   }
 
-  async prepare() {
-    var cluster = this.newCluster()
-    var database = cluster.database(this._database)
-    var scope = database.scope(this._scope)
+  async prepare(): Promise<void> {
+    const cluster = this.newCluster()
+    const database = cluster.database(this._database)
+    const scope = database.scope(this._scope)
     if (this._integrationEnabled) {
       await this.maybeCreateScope(scope)
     }
@@ -266,7 +316,7 @@ class Harness {
     this._testScope = scope
   }
 
-  async maybeCreateScope(scope) {
+  async maybeCreateScope(scope: Scope): Promise<void> {
     try {
       await this.maybeCreateDatabase(scope.database)
       const qs = `CREATE SCOPE \`${scope.database.name}\`.\`${scope.name}\` IF NOT EXISTS`
@@ -276,20 +326,20 @@ class Harness {
     }
   }
 
-  async maybeCreateDatabase(database) {
+  async maybeCreateDatabase(database: Database): Promise<void> {
     if (database.name !== 'Default') {
       const qs = `CREATE DATABASE \`${database.name}\` IF NOT EXISTS`
       await database.cluster.executeQuery(qs)
     }
   }
 
-  newCluster(options) {
+  newCluster(options?: ConnectionOptions): Cluster {
     if (!options) {
       options = {}
     }
 
-    let username = options.username || this._user
-    let password = options.password || this._pass
+    const username = options.username || this._user
+    const password = options.password || this._pass
 
     const credential = new Credential(username, password)
 
@@ -298,24 +348,24 @@ class Harness {
     }
 
     if (this.nonprod) {
-      return analytics.Cluster.createInstance(options.connstr, credential, {
+      return createInstance(options.connstr!, credential, {
         securityOptions: {
           trustOnlyCertificates:
-            analytics.Certificates.getNonprodCertificates(),
+            Certificates.getNonprodCertificates(),
         },
       })
     } else if (this.disableCertVerification) {
-      return analytics.Cluster.createInstance(options.connstr, credential, {
+      return createInstance(options.connstr!, credential, {
         securityOptions: {
           disableServerCertificateVerification: true,
         },
       })
     } else {
-      return analytics.Cluster.createInstance(options.connstr, credential)
+      return createInstance(options.connstr!, credential)
     }
   }
 
-  async cleanup() {
+  async cleanup(): Promise<void> {
     this._testDatabase = null
     this._testScope = null
 
@@ -325,12 +375,12 @@ class Harness {
     }
   }
 
-  sleep(ms) {
+  sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
-  supportsFeature(feature) {
-    var featureEnabled = undefined
+  supportsFeature(feature: string): boolean {
+    let featureEnabled: boolean | undefined = undefined
 
     TEST_CONFIG.features.forEach((cfgFeature) => {
       if (cfgFeature.feature === '*' || cfgFeature.feature === feature) {
@@ -351,52 +401,45 @@ class Harness {
     throw new Error('invalid code for feature checking')
   }
 
-  skipIfMissingFeature(test, feature) {
+  skipIfMissingFeature(test: Mocha.Context, feature: string): void {
     if (!this.supportsFeature(feature)) {
-      /* eslint-disable-next-line mocha/no-skipped-tests */
       test.skip()
       throw new Error('test skipped')
     }
   }
 
-  skipIfIntegrationDisabled(test) {
+  skipIfIntegrationDisabled(test: Mocha.Context): void {
     if (!this._integrationEnabled) {
-      // eslint-disable-next-line mocha/no-skipped-tests
       test.skip()
       throw new Error('test skipped as integration tests are disabled')
     }
   }
 
-  get lib() {
-    return analytics
-  }
-
-  get c() {
+  get c(): Cluster | null {
     return this._testCluster
   }
-  get d() {
+
+  get d(): Database | null {
     return this._testDatabase
   }
-  get s() {
+
+  get s(): Scope | null {
     return this._testScope
   }
 }
 
-var harness = new Harness()
+const harness = new Harness()
 
-// These are written as normal functions, not async lambdas
-// due to our need to specify custom timeouts, which are not
-// yet supported on before/after methods yet.
-/* eslint-disable-next-line mocha/no-top-level-hooks */
-before(function (done) {
+// Hook registration with Mocha
+// These use traditional function syntax due to timeout requirements
+before(function(done) {
   this.timeout(30000)
   harness.prepare().then(done).catch(done)
 })
-/* eslint-disable-next-line mocha/no-top-level-hooks */
-after(function (done) {
+
+after(function(done) {
   this.timeout(10000)
   harness.cleanup().then(done).catch(done)
 })
 
-/* eslint-disable-next-line mocha/no-exports */
-module.exports = harness
+export { harness }

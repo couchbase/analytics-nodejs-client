@@ -15,31 +15,33 @@
  *  limitations under the License.
  */
 
-import { Cluster } from './cluster'
+import { Cluster } from './cluster.js'
 import {
   QueryMetadata,
   QueryOptions,
   QueryResult,
   QueryResultStream,
   QueryScanConsistency,
-} from './querytypes'
+} from './querytypes.js'
 import * as http from 'node:http'
-import { Parser, parser } from 'stream-json'
+import stream_json from 'stream-json';
+const { parser } = stream_json
+import type { Parser } from 'stream-json'
 import { pipeline } from 'node:stream'
-import { runWithRetry } from './retries'
-import { AnalyticsError } from './errors'
+import { runWithRetry } from './retries.js'
+import { AnalyticsError } from './errors.js'
 import {
   ConnectionError,
   HttpStatusError,
   InternalConnectionTimeout,
-} from './internalerrors'
+} from './internalerrors.js'
 import { randomUUID } from 'node:crypto'
-import { Deserializer } from './deserializers'
-import { JsonTokenParserStream, PrimitiveFrame } from './jsonparser'
-import https from 'node:https'
-import { RequestContext } from './requestcontext'
-import { ErrorHandler } from './errorhandler'
-import { CouchbaseLogger } from './logger'
+import { Deserializer } from './deserializers.js'
+import { JsonTokenParserStream, PrimitiveFrame } from './jsonparser.js'
+import * as https from 'node:https'
+import { RequestContext } from './requestcontext.js'
+import { ErrorHandler } from './errorhandler.js'
+import { CouchbaseLogger } from './logger.js'
 
 /**
  * @internal

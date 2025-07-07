@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016-2024. Couchbase, Inc.
+ *  Copyright 2016-2025. Couchbase, Inc.
  *  All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,33 +15,30 @@
  *  limitations under the License.
  */
 
-'use strict'
-
-const { setTimeout } = require('node:timers/promises')
-
-const assert = require('chai').assert
-const H = require('./harness')
-
-const {
+import { setTimeout } from 'node:timers/promises'
+import { assert } from 'chai'
+import { harness } from './harness.js'
+import { Cluster, Scope } from '../lib/analytics.js'
+import {
   QueryMetadata,
   QueryMetrics,
   QueryScanConsistency,
-} = require('../lib/querytypes')
-const {
+} from '../lib/querytypes.js'
+import {
   PassthroughDeserializer,
   JsonDeserializer,
-} = require('../lib/deserializers')
+} from '../lib/deserializers.js'
 
-function genericTests(instance) {
+function genericTests(instance: () => Cluster | Scope) {
   describe('#queryTests', function () {
     before(async function () {
-      H.skipIfIntegrationDisabled(this)
+      harness.skipIfIntegrationDisabled(this)
     })
 
     it('should successfully stream rows', async function () {
-      let results = []
+      const results = []
       const qs = `FROM RANGE(1, 100) AS i SELECT *`
-      let res = await instance().executeQuery(qs)
+      const res = await instance()!.executeQuery(qs)
       for await (const row of res.rows()) {
         results.push(row)
       }
@@ -49,11 +46,11 @@ function genericTests(instance) {
     })
 
     it('should successfully stream rows using events', async function () {
-      const eventStreamQuery = (qRes) => {
-        return new Promise((resolve, reject) => {
-          const results = []
+      const eventStreamQuery = (qRes: any) => {
+        return new Promise<{ rows: any[]; meta: QueryMetadata }>((resolve, reject) => {
+          const results: any[] = []
           const readable = qRes.rows()
-          readable.on('data', (row) => {
+          readable.on('data', (row: any) => {
             results.push(row)
           })
           readable.on('end', () => {
@@ -63,31 +60,31 @@ function genericTests(instance) {
               meta: metadata,
             })
           })
-          readable.on('error', (err) => {
+          readable.on('error', (err: Error) => {
             reject(err)
           })
         })
       }
 
       const qs = `FROM RANGE(1, 100) AS i SELECT *`
-      let qRes = await instance().executeQuery(qs)
-      let result
+      const qRes = await instance()!.executeQuery(qs)
+      let result: { rows: any[]; meta: QueryMetadata } | undefined
       try {
         result = await eventStreamQuery(qRes)
       } catch (err) {} // eslint-disable-line no-empty
-      assert.equal(result.rows.length, 100)
-      assert.instanceOf(result.meta, QueryMetadata)
+      assert.equal(result!.rows.length, 100)
+      assert.instanceOf(result!.meta, QueryMetadata)
     })
 
     it('should use the passthrough deserializer', async function () {
-      let jsonRows = []
-      let passthroughRows = []
+      const jsonRows: any[] = []
+      const passthroughRows: any[] = []
 
       const qs = `SELECT 1=1`
-      let jsonRes = await instance().executeQuery(qs, {
+      const jsonRes = await instance()!.executeQuery(qs, {
         deserializer: new JsonDeserializer(),
       })
-      let passthroughRes = await instance().executeQuery(qs, {
+      const passthroughRes = await instance()!.executeQuery(qs, {
         deserializer: new PassthroughDeserializer(),
       })
       for await (const row of jsonRes.rows()) {
@@ -104,16 +101,15 @@ function genericTests(instance) {
     })
 
     it('should work with multiple options', async function () {
-      const results = []
+      const results: any[] = []
       const qs = `SELECT $five=5`
 
-      let res = await instance().executeQuery(qs, {
+      const res = await instance()!.executeQuery(qs, {
         namedParameters: {
           five: 5,
         },
         readOnly: true,
         scanConsistency: QueryScanConsistency.NotBounded,
-        priority: true,
       })
 
       for await (const row of res.rows()) {
@@ -125,18 +121,18 @@ function genericTests(instance) {
     })
 
     it('should should raise error on negative timeout', async function () {
-      await H.throwsHelper(async () => {
-        await instance().executeQuery("SELECT 'FOO' AS message", {
+      await harness.throwsHelper(async () => {
+        await instance()!.executeQuery("SELECT 'FOO' AS message", {
           timeout: -1,
         })
       }, Error)
     })
 
     it('should work with positional parameters', async function () {
-      const results = []
+      const results: any[] = []
       const qs = `SELECT $2=1`
 
-      let res = await instance().executeQuery(qs, {
+      const res = await instance()!.executeQuery(qs, {
         positionalParameters: [undefined, 1],
       })
 
@@ -149,9 +145,9 @@ function genericTests(instance) {
     })
 
     it('should successfully provide query metadata', async function () {
-      let results = []
+      const results: any[] = []
       const qs = `FROM RANGE(1, 100) AS i SELECT *`
-      let res = await instance().executeQuery(qs)
+      const res = await instance()!.executeQuery(qs)
       for await (const row of res.rows()) {
         results.push(row)
       }
@@ -172,12 +168,12 @@ function genericTests(instance) {
     })
 
     it('should raise Error when query metadata is unavailable', async function () {
-      let results = []
+      const results: any[] = []
       const qs = `FROM RANGE(1, 100) AS i SELECT *`
-      let res = await instance().executeQuery(qs)
+      const res = await instance()!.executeQuery(qs)
       try {
         res.metadata()
-      } catch (err) {
+      } catch (err: any) {
         assert.equal(
           err.message,
           'Metadata is only available once all rows have been iterated'
@@ -192,7 +188,7 @@ function genericTests(instance) {
 
       try {
         res.metadata()
-      } catch (err) {
+      } catch (err: any) {
         assert.equal(
           err.message,
           'Metadata is only available once all rows have been iterated'
@@ -215,11 +211,11 @@ function genericTests(instance) {
     })
 
     it('should fetch all databases', async function () {
-      const results = []
+      const results: any[] = []
       const qs = `SELECT RAW {\`DatabaseName\`, \`SystemDatabase\`}
           FROM \`System\`.\`Metadata\`.\`Database\``
 
-      let res = await instance().executeQuery(qs)
+      const res = await instance()!.executeQuery(qs)
 
       for await (const row of res.rows()) {
         results.push(row)
@@ -227,7 +223,7 @@ function genericTests(instance) {
 
       assert.isAtLeast(results.length, 2)
 
-      const testDatabase = results.find((db) => db.DatabaseName === H.d.name)
+      const testDatabase = results.find((db) => db.DatabaseName === harness.d!.name)
       const systemDatabase = results.find((db) => db.DatabaseName === 'System')
 
       assert.isNotNull(systemDatabase)
@@ -237,20 +233,20 @@ function genericTests(instance) {
     })
 
     it('should fetch all scopes', async function () {
-      const results = []
+      const results: any[] = []
       const qs = `SELECT RAW \`DataverseName\`
           FROM \`System\`.\`Metadata\`.\`Dataverse\`
           WHERE \`DatabaseName\` = ?`
 
-      let res = await instance().executeQuery(qs, {
-        positionalParameters: [H.d.name],
+      const res = await instance()!.executeQuery(qs, {
+        positionalParameters: [harness.d!.name],
       })
 
       for await (const row of res.rows()) {
         results.push(row)
       }
 
-      const testScope = results.find((scope) => scope === H.s.name)
+      const testScope = results.find((scope) => scope === harness.s!.name)
 
       assert.isNotNull(testScope)
       assert.isAtLeast(results.length, 1)
@@ -260,7 +256,7 @@ function genericTests(instance) {
       const qs = 'FROM range(0, 1000000) AS r SELECT *'
       const abortController = new AbortController()
 
-      let qResPromise = instance().executeQuery(qs, {
+      const qResPromise = instance()!.executeQuery(qs, {
         abortSignal: abortController.signal,
       })
       assert.instanceOf(qResPromise, Promise)
@@ -270,7 +266,7 @@ function genericTests(instance) {
       let gotAbortError = false
       try {
         await qResPromise
-      } catch (err) {
+      } catch (err: any) {
         if (err.name === 'AbortError') {
           gotAbortError = true
         }
@@ -282,10 +278,10 @@ function genericTests(instance) {
     it('should cancel while iterating using abort controller', async function () {
       const qs = `FROM RANGE(1, 100) AS i SELECT *`
       const abortController = new AbortController()
-      const results = []
+      const results: any[] = []
       const expectedCount = 5
       let count = 0
-      let res = await instance().executeQuery(qs, {
+      const res = await instance()!.executeQuery(qs, {
         abortSignal: abortController.signal,
       })
 
@@ -299,7 +295,7 @@ function genericTests(instance) {
           results.push(row)
           count += 1
         }
-      } catch (err) {
+      } catch (err: any) {
         assert.strictEqual(err.name, 'AbortError')
       }
       assert.strictEqual(results.length, expectedCount)
@@ -307,10 +303,10 @@ function genericTests(instance) {
 
     it('should cancel while iterating using query result cancel', async function () {
       const qs = `FROM RANGE(1, 100) AS i SELECT *`
-      const results = []
+      const results: any[] = []
       const expectedCount = 5
       let count = 0
-      let res = await instance().executeQuery(qs)
+      const res = await instance()!.executeQuery(qs)
 
       try {
         for await (const row of res.rows()) {
@@ -320,7 +316,7 @@ function genericTests(instance) {
           results.push(row)
           count += 1
         }
-      } catch (err) {
+      } catch (err: any) {
         assert.strictEqual(err.name, 'AbortError')
       }
       assert.strictEqual(results.length, expectedCount)
@@ -329,6 +325,5 @@ function genericTests(instance) {
 }
 
 describe('#Columnar query - cluster', function () {
-  /* eslint-disable-next-line mocha/no-setup-in-describe */
-  genericTests(() => H.c)
+  genericTests(() => harness.c)
 })

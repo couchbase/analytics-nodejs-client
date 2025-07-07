@@ -15,25 +15,23 @@
  *  limitations under the License.
  */
 
-'use strict'
-
-const assert = require('chai').assert
-const H = require('./harness')
-
-const { PassthroughDeserializer } = require('../lib/deserializers')
+import { assert } from 'chai';
+import { harness }  from './harness.js'
+import { PassthroughDeserializer } from '../lib/deserializers.js'
+import { createInstance, ClusterOptions } from '../lib/analytics.js'
 
 describe('#Cluster', function () {
   it('should correctly set timeouts', function () {
-    let options = {
+    const options: ClusterOptions = {
       timeoutOptions: {
         connectTimeout: 20000,
         queryTimeout: 80000,
       },
     }
 
-    const cluster = H.lib.Cluster.createInstance(
-      H.connStr,
-      H.credentials,
+    const cluster = createInstance(
+      harness.connStr!,
+      harness.credentials,
       options
     )
 
@@ -42,52 +40,65 @@ describe('#Cluster', function () {
   })
 
   it('should raise error on negative connectTimeout', async function () {
-    let options = {
+    const options: ClusterOptions = {
       timeoutOptions: {
         connectTimeout: -1,
       },
     }
 
-    await H.throwsHelper(() => {
-      H.lib.Cluster.createInstance(H.connStr, H.credentials, options)
+    await harness.throwsHelper(() => {
+      return createInstance(
+        harness.connStr!,
+        harness.credentials,
+        options
+      )
     }, Error)
   })
 
   it('should raise error on negative queryTimeout', async function () {
-    let options = {
+    const options: ClusterOptions = {
       timeoutOptions: {
         queryTimeout: -1,
       },
     }
 
-    await H.throwsHelper(() => {
-      H.lib.Cluster.createInstance(H.connStr, H.credentials, options)
+    await harness.throwsHelper(() => {
+      return createInstance(
+        harness.connStr!,
+        harness.credentials,
+        options
+      )
     }, Error)
   })
 
   it('should throw an error if multiple trustOnly options are set', async function () {
-    let options = {
+    const options: ClusterOptions = {
       securityOptions: {
         trustOnlyCapella: true,
         trustOnlyPemFile: 'pemFile',
       },
     }
 
-    await H.throwsHelper(() => {
-      H.lib.Cluster.createInstance(H.connStr, H.credentials, options)
+    await harness.throwsHelper(() => {
+      return createInstance(
+        harness.connStr!,
+        harness.credentials,
+        options
+      )
     }, Error)
   })
 
   it('should correctly set cluster-level deserializer', function () {
-    let options = {
+    const options: ClusterOptions = {
       deserializer: new PassthroughDeserializer(),
     }
 
-    const cluster = H.lib.Cluster.createInstance(
-      H.connStr,
-      H.credentials,
+    const cluster = createInstance(
+      harness.connStr!,
+      harness.credentials,
       options
     )
     assert.instanceOf(cluster.deserializer, PassthroughDeserializer)
   })
 })
+

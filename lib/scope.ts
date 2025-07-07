@@ -15,10 +15,10 @@
  *  limitations under the License.
  */
 
-import { Database } from './database'
-import { Cluster } from './cluster'
-import { QueryOptions, QueryResult } from './querytypes'
-import { QueryExecutor } from './queryexecutor'
+import { Database } from './database.js'
+import { Cluster } from './cluster.js'
+import { QueryOptions, QueryResult } from './querytypes.js'
+import { QueryExecutor } from './queryexecutor.js'
 
 /**
  * Volatile: This API is subject to change at any time.

@@ -1,5 +1,5 @@
-import { ErrorContext } from './internalerrors'
-import http from 'node:http'
+import { ErrorContext } from './internalerrors.js'
+import * as http from 'node:http'
 
 /**
  * Shared request context for tracking DNS records and the error context

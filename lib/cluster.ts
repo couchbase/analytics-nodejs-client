@@ -15,15 +15,14 @@
  *  limitations under the License.
  */
 
-import { Credential } from './credential'
-import { Database } from './database'
-import { Deserializer, JsonDeserializer } from './deserializers'
-import { QueryOptions, QueryResult } from './querytypes'
-import { QueryExecutor } from './queryexecutor'
-
-import { HttpClient } from './httpclient'
-import { InvalidArgumentError } from './errors'
-import { ConnSpec } from './connspec'
+import { Credential } from './credential.js'
+import { Database } from './database.js'
+import { Deserializer, JsonDeserializer } from './deserializers.js'
+import { QueryOptions, QueryResult } from './querytypes.js'
+import { QueryExecutor } from './queryexecutor.js'
+import { HttpClient } from './httpclient.js'
+import { InvalidArgumentError } from './errors.js'
+import { ConnSpec } from './connspec.js'
 import {
   CouchbaseLogger,
   LOG_LEVELS,
@@ -31,8 +30,8 @@ import {
   NOOP_LOGGER,
   LogLevel,
   createConsoleLogger,
-} from './logger'
-import { ParsingUtilities } from './utilities'
+} from './logger.js'
+import { ParsingUtilities } from './utilities.js'
 
 /**
  * Specifies the timeout options for the client.

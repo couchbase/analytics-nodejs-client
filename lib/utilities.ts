@@ -15,7 +15,7 @@
  *  limitations under the License.
  */
 
-import { TimeoutError } from './errors'
+import { TimeoutError } from './errors.js'
 
 /**
  * Reprents a node-style callback which receives an optional error or result.
