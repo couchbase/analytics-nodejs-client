@@ -27,7 +27,7 @@ export class HttpStatusError extends Error {
   private statusCode: number
 
   constructor(statusCode: number) {
-    super('HttpStatusCode error')
+    super('HttpStatusCode error: ' + statusCode)
     this.name = this.constructor.name
     this.statusCode = statusCode
   }
@@ -51,7 +51,7 @@ export class ConnectionError extends Error {
   private dnsRecord?: string
 
   constructor(err: Error, request: boolean, dnsRecord?: string) {
-    super('ConnectionError')
+    super(`ConnectionError: ${err.message}`)
     this.name = this.constructor.name
     this.cause = err
     this.request = request
