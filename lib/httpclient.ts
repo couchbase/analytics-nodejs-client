@@ -25,6 +25,7 @@ import { Certificates } from './certificates'
 import fs from 'fs'
 import http from 'node:http'
 import https from 'node:https'
+import dns from 'node:dns'
 
 /**
  * @internal
@@ -43,11 +44,13 @@ export class HttpClient {
   ) {
     this._hostname = url.hostname
     this._auth = `${credential.username}:${credential.password}`
+    this.randomLookup = this.randomLookup.bind(this)
 
     if (url.protocol === 'http:') {
       this._port = url.port ?? '80'
       this._agent = new HttpAgent({
         keepAlive: true,
+        lookup: this.randomLookup,
       })
       this._module = http
     } else if (url.protocol === 'https:') {
@@ -55,6 +58,7 @@ export class HttpClient {
       const tlsOptions = this._buildTlsOptions(securityOptions)
       this._agent = new HttpsAgent({
         keepAlive: true,
+        lookup: this.randomLookup,
         ...tlsOptions,
       })
       this._module = https
@@ -78,6 +82,7 @@ export class HttpClient {
   genericRequestOptions(): http.RequestOptions {
     return {
       agent: this._agent,
+      hostname: this._hostname,
       port: this._port,
       auth: this._auth,
     }
@@ -133,6 +138,38 @@ export class HttpClient {
     }
 
     return tlsOptions
+  }
+
+  /**
+   * @internal
+   */
+  randomLookup(
+    hostname: string,
+    options: dns.LookupOptions,
+    callback: (
+      err: NodeJS.ErrnoException | null,
+      address: string | dns.LookupAddress[],
+      family?: number
+    ) => void
+  ): void {
+    // There are two flavours of the callback signature. if 'all' is true: (err, address[]) else (err, address, family)
+    // On Node.js versions > 18, 'all' is true by default, which means we have to handle both cases.
+    // See https://github.com/nodejs/node/issues/55762
+    const wantAll = options.all
+    dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+      if (err || addresses.length === 0) {
+        const e = err ?? new Error(`No addresses found for ${hostname}`)
+        return callback(e, wantAll ? [] : '', undefined)
+      }
+      const selectedAddress =
+        addresses[Math.floor(Math.random() * addresses.length)]
+
+      if (wantAll) {
+        callback(null, [selectedAddress])
+      } else {
+        callback(null, selectedAddress.address, selectedAddress.family)
+      }
+    })
   }
 
   /**

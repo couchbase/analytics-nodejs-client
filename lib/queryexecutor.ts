@@ -69,7 +69,7 @@ export class QueryExecutor {
     this._databaseName = databaseName
     this._scopeName = scopeName
     this._deserializer = deserializer
-    this._requestContext = new RequestContext(this._cluster.httpClient.hostname)
+    this._requestContext = new RequestContext()
     this._abortController = new AbortController()
     this._signal = signal
       ? AbortSignal.any([this._abortController.signal, signal])
@@ -147,9 +147,6 @@ export class QueryExecutor {
     body: string,
     deadline: number
   ): Promise<QueryResult> {
-    requestOptions.hostname =
-      await this.requestContext.incrementAttemptAndGetRecord()
-
     return new Promise((resolve, reject) => {
       const abortHandler = () => {
         req.destroy()

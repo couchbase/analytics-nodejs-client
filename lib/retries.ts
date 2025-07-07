@@ -16,7 +16,7 @@
  */
 
 import { PromiseHelper } from './utilities'
-import { TimeoutError } from './errors'
+import { AnalyticsError, TimeoutError } from './errors'
 import { RequestContext } from './requestcontext'
 
 /**
@@ -75,13 +75,17 @@ export async function runWithRetry<T>(
   deadline: number,
   requestContext: RequestContext
 ): Promise<T> {
-  let attempt = 0
   for (;;) {
-    attempt++
+    requestContext.incrementAttempt()
     const remainingTime = deadline - Date.now()
     if (remainingTime <= 0) {
       throw new TimeoutError(
         requestContext.attachErrorContext('Query timeout exceeded during retry')
+      )
+    }
+    if (requestContext.retriesExceeded()) {
+      throw new AnalyticsError(
+        requestContext.attachErrorContext('Max retry attempts exceeded')
       )
     }
 
@@ -90,7 +94,7 @@ export async function runWithRetry<T>(
     } catch (err) {
       const behaviour = evaluate(err)
       if (behaviour.shouldRetry()) {
-        const delay = calculateBackoff(attempt)
+        const delay = calculateBackoff(requestContext.numAttempts)
         if (Date.now() + delay > deadline) {
           throw new TimeoutError(
             requestContext.attachErrorContext(

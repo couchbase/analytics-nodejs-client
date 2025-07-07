@@ -62,14 +62,6 @@ export class ErrorHandler {
     } else if (errs instanceof TimeoutError) {
       return RequestBehaviour.fail(errs)
     } else if (errs instanceof InternalConnectionTimeout) {
-      context.markRecordAsUsed(errs.DnsRecord)
-      if (context.recordsExhausted()) {
-        return RequestBehaviour.fail(
-          new TimeoutError(
-            'Timed out attempting to connect to all available DNS records'
-          )
-        )
-      }
       context.setPreviousAttemptErrors(errs)
       return RequestBehaviour.retry()
     } else if (errs instanceof DnsRecordsExhaustedError) {
@@ -83,7 +75,6 @@ export class ErrorHandler {
     } else if (errs instanceof ConnectionError) {
       if (this._isRetriableConnectionError(errs)) {
         context.setPreviousAttemptErrors(errs)
-        if (errs.DnsRecord) context.markRecordAsUsed(errs.DnsRecord)
         return RequestBehaviour.retry()
       }
 

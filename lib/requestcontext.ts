@@ -1,4 +1,3 @@
-import { DnsClient } from './dnsclient'
 import { ErrorContext } from './internalerrors'
 import http from 'node:http'
 
@@ -8,12 +7,14 @@ import http from 'node:http'
  * @internal
  */
 export class RequestContext {
-  private _dnsClient: DnsClient
   private _errorContext: ErrorContext
+  private _numAttempts: number
+  private _maxRetryAttempts: number
 
-  constructor(hostname: string) {
-    this._dnsClient = new DnsClient(hostname)
+  constructor() {
     this._errorContext = new ErrorContext()
+    this._maxRetryAttempts = 7
+    this._numAttempts = 0
   }
 
   /**
@@ -26,30 +27,23 @@ export class RequestContext {
   /**
    * @internal
    */
+  get numAttempts(): number {
+    return this._numAttempts
+  }
+
+  /**
+   * @internal
+   */
   incrementAttempt(): void {
-    this._errorContext.numAttempts++
+    this._numAttempts++
+    this._errorContext.numAttempts = this._numAttempts
   }
 
   /**
    * @internal
    */
-  async incrementAttemptAndGetRecord(): Promise<string> {
-    this.incrementAttempt()
-    return await this._dnsClient.maybeUpdateAndGetRandomRecord()
-  }
-
-  /**
-   * @internal
-   */
-  markRecordAsUsed(dnsRecord: string): void {
-    this._dnsClient.markRecordAsUsed(dnsRecord)
-  }
-
-  /**
-   * @internal
-   */
-  recordsExhausted(): boolean {
-    return this._dnsClient.getAvailableRecords().length === 0
+  retriesExceeded(): boolean {
+    return this._numAttempts > this._maxRetryAttempts
   }
 
   /**
