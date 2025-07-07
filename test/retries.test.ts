@@ -15,22 +15,18 @@
  *  limitations under the License.
  */
 
-'use strict'
-
-const assert = require('chai').assert
-const { runWithRetry, RequestBehaviour } = require('../lib/retries')
-
-const H = require('./harness')
-const { TimeoutError } = require('../lib/errors')
-
-const whyIsNodeRunning = require('why-is-node-running')
+import { assert } from 'chai'
+import { runWithRetry, RequestBehaviour } from '../lib/retries.js'
+import { harness } from './harness.js'
+import { TimeoutError } from '../lib/errors.js'
+import { RequestContext } from '../lib/requestcontext.js'
 
 describe('#Retries', function () {
   it('should retry on retriable errors and succeed eventually', async function () {
     let callCount = 0
     const failAttempts = 2
 
-    const fn = async () => {
+    const fn = async (): Promise<string> => {
       callCount++
       if (callCount <= failAttempts) {
         throw new Error('Temporary failure')
@@ -38,41 +34,41 @@ describe('#Retries', function () {
       return 'success'
     }
 
-    const evaluate = (err) => {
+    const evaluate = (err: Error) => {
       if (err.message === 'Temporary failure') {
         return RequestBehaviour.retry()
       }
       return RequestBehaviour.fail(err)
     }
 
-    const result = await runWithRetry(fn, evaluate, Date.now() + 50000)
+    const result = await runWithRetry(fn, evaluate, Date.now() + 50000, new RequestContext("test"))
     assert.equal(result, 'success')
     assert.equal(callCount, failAttempts + 1)
   })
 
   it('should fail if deadline is exceeded', async function () {
-    const fn = async () => {
+    const fn = async (): Promise<never> => {
       throw new Error('Temporary failure')
     }
 
     const evaluate = () => RequestBehaviour.retry()
 
-    await H.throwsHelper(async () => {
-      await runWithRetry(fn, evaluate, Date.now() + 500)
+    await harness.throwsHelper(async () => {
+      await runWithRetry(fn, evaluate, Date.now() + 500, new RequestContext("test"))
     }, TimeoutError)
   })
 
   it('should fail immediately on fatal error', async function () {
     let callCount = 0
 
-    const fn = async () => {
+    const fn = async (): Promise<never> => {
       callCount++
       throw new Error('Fatal')
     }
-    const evaluate = (err) => RequestBehaviour.fail(err)
+    const evaluate = (err: Error) => RequestBehaviour.fail(err)
 
-    await H.throwsHelper(async () => {
-      await runWithRetry(fn, evaluate, Date.now() + 500)
+    await harness.throwsHelper(async () => {
+      await runWithRetry(fn, evaluate, Date.now() + 500, new RequestContext("test"))
     }, Error)
 
     assert.equal(callCount, 1)

@@ -15,20 +15,20 @@
  *  limitations under the License.
  */
 
-import { RequestContext } from './requestcontext'
+import { RequestContext } from './requestcontext.js'
 import {
   AnalyticsError,
   InvalidCredentialError,
   QueryError,
   TimeoutError,
-} from './errors'
+} from './errors.js'
 import {
   ConnectionError,
   DnsRecordsExhaustedError,
   HttpStatusError,
   InternalConnectionTimeout,
-} from './internalerrors'
-import { RequestBehaviour } from './retries'
+} from './internalerrors.js'
+import { RequestBehaviour } from './retries.js'
 
 /**
  * Static class for shared error handling logic
@@ -81,7 +81,7 @@ export class ErrorHandler {
       return RequestBehaviour.fail(
         new AnalyticsError(
           context.attachErrorContext(
-            `Got an unretriable error from the HTTP library, details: ${errs.Cause.message}`
+            `Got an unretriable error from the HTTP library, details: ${errs.cause.message}`
           )
         )
       )
@@ -185,7 +185,7 @@ export class ErrorHandler {
    * @internal
    */
   private static _isRetriableConnectionError(error: ConnectionError): boolean {
-    const nodeError = error.Cause as NodeJS.ErrnoException
+    const nodeError = error.cause as NodeJS.ErrnoException
     if (!error.isRequestError || !nodeError || !nodeError.code) {
       return false
     }

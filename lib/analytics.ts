@@ -15,8 +15,8 @@
  *  limitations under the License.
  */
 
-import { Credential } from './credential'
-import { Cluster, ClusterOptions } from './cluster'
+import { Credential } from './credential.js'
+import { Cluster, ClusterOptions } from './cluster.js'
 
 /**
  * Acts as the entrypoint into the rest of the library.  Connecting to the cluster
@@ -35,11 +35,11 @@ export function createInstance(
   return Cluster.createInstance(connStr, credential, options)
 }
 
-export * from './querytypes'
-export * from './database'
-export * from './deserializers'
-export * from './certificates'
-export * from './cluster'
-export * from './credential'
-export * from './errors'
-export * from './scope'
+export * from './querytypes.js'
+export * from './database.js'
+export * from './deserializers.js'
+export * from './certificates.js'
+export * from './cluster.js'
+export * from './credential.js'
+export * from './errors.js'
+export * from './scope.js'

@@ -15,12 +15,12 @@
  *  limitations under the License.
  */
 
-import { Deserializer } from './deserializers'
-import { QueryExecutor } from './queryexecutor'
+import { Deserializer } from './deserializers.js'
+import { QueryExecutor } from './queryexecutor.js'
 import { Readable, Transform } from 'node:stream'
 import { TransformCallback } from 'stream'
-import { TimeoutError } from './errors'
-import { ParsingUtilities } from './utilities'
+import { TimeoutError } from './errors.js'
+import { ParsingUtilities } from './utilities.js'
 
 /**
  * Contains the results of a columnar query.

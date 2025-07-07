@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016-2024. Couchbase, Inc.
+ *  Copyright 2016-2025. Couchbase, Inc.
  *  All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,29 +15,30 @@
  *  limitations under the License.
  */
 
-'use strict'
-
-const { parser } = require('stream-json')
-const { pipeline, Readable } = require('node:stream')
-
-const { JsonTokenParserStream } = require('../lib/jsonparser')
-
-const assert = require('chai').assert
-const H = require('./harness')
-const { QueryMetadata } = require('../lib/querytypes')
+import pkg from 'stream-json'
+const { parser } = pkg
+import { pipeline, Readable } from 'node:stream'
+import { assert } from 'chai'
+import { harness } from './harness.js'
+import { JsonTokenParserStream } from '../lib/jsonparser.js'
+import { QueryMetadata } from '../lib/querytypes.js'
 
 describe('JsonTokenParserStream', function () {
-  async function collectRowsAndErrors(jsonString) {
+  async function collectRowsAndErrors(jsonString: string): Promise<{
+    rows: string[];
+    errorsItems: string[] | null;
+    stack: any;
+  }> {
     return new Promise((resolve, reject) => {
-      const rows = []
-      let errorsItems = null
+      const rows: string[] = []
+      let errorsItems: string[] | null = null
       const jsonParser = new JsonTokenParserStream()
 
-      jsonParser.on('data', (rowJson) => {
+      jsonParser.on('data', (rowJson: string) => {
         rows.push(rowJson)
       })
 
-      jsonParser.on('errorsComplete', (itemsArray) => {
+      jsonParser.on('errorsComplete', (itemsArray: string[]) => {
         errorsItems = itemsArray.slice()
       })
 
@@ -225,9 +226,9 @@ describe('JsonTokenParserStream', function () {
     const { rows, errorsItems, stack } = await collectRowsAndErrors(erroredJson)
 
     assert.equal(rows.length, 0)
-    assert.equal(errorsItems.length, 2)
-    assert.equal(errorsItems[0], '{"code":232,"message":"error1"}')
-    assert.equal(errorsItems[1], '{"code":233,"message":"error2"}')
+    assert.equal(errorsItems!.length, 2)
+    assert.equal(errorsItems![0], '{"code":232,"message":"error1"}')
+    assert.equal(errorsItems![1], '{"code":233,"message":"error2"}')
 
     const metadata = QueryMetadata.parse(stack.value)
     assert.deepEqual(metadata.requestId, '94c7f89f-92b6-4aba-a90d-be715ca47309')
@@ -271,8 +272,8 @@ describe('JsonTokenParserStream', function () {
     assert.equal(rows.length, 2)
     assert.deepEqual(rows[0], '{"id":1}')
     assert.deepEqual(rows[1], '{"id":2}')
-    assert.equal(errorsItems.length, 1)
-    assert.equal(errorsItems[0], '{"code":232,"message":"error1"}')
+    assert.equal(errorsItems!.length, 1)
+    assert.equal(errorsItems![0], '{"code":232,"message":"error1"}')
 
     const metadata = QueryMetadata.parse(stack.value)
     assert.deepEqual(metadata.requestId, '94c7f89f-92b6-4aba-a90d-be715ca47309')
@@ -298,7 +299,7 @@ describe('JsonTokenParserStream', function () {
       "warnings": [
         { "code": 100, "message": "warning1" },
         { "code": 101, "message": "warning2" }
-      ],  
+      ],
       "status": "fatal",
       "metrics": {
         "elapsedTime": "14.927542ms",
@@ -438,7 +439,7 @@ describe('JsonTokenParserStream', function () {
   it('should fail to parse an empty string', async function () {
     const data = ''
 
-    await H.throwsHelper(async () => {
+    await harness.throwsHelper(async () => {
       await collectRowsAndErrors(data)
     }, Error)
   })
@@ -446,7 +447,7 @@ describe('JsonTokenParserStream', function () {
   it('should fail to parse only whitespace', async function () {
     const data = '   \n\t  '
 
-    await H.throwsHelper(async () => {
+    await harness.throwsHelper(async () => {
       await collectRowsAndErrors(data)
     }, Error)
   })
@@ -454,7 +455,7 @@ describe('JsonTokenParserStream', function () {
   it('should fail to parse leading garbage', async function () {
     const data = 'garbage{"key":"value"}'
 
-    await H.throwsHelper(async () => {
+    await harness.throwsHelper(async () => {
       await collectRowsAndErrors(data)
     }, Error)
   })
@@ -462,16 +463,16 @@ describe('JsonTokenParserStream', function () {
   it('should fail to parse trailing garbage', async function () {
     const data = '{"key":"value"}garbage'
 
-    await H.throwsHelper(async () => {
+    await harness.throwsHelper(async () => {
       await collectRowsAndErrors(data)
     }, Error)
   })
 
   it('should fail to parse garbage between objects', async function () {
-    const date = '[{"id":1,"name":"Alice"},garbage,{"id":2,"name":"Bob"}]'
+    const data = '[{"id":1,"name":"Alice"},garbage,{"id":2,"name":"Bob"}]'
 
-    await H.throwsHelper(async () => {
-      await collectRowsAndErrors(date)
+    await harness.throwsHelper(async () => {
+      await collectRowsAndErrors(data)
     }, Error)
   })
 })

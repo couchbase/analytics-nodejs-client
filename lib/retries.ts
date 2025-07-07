@@ -15,9 +15,9 @@
  *  limitations under the License.
  */
 
-import { PromiseHelper } from './utilities'
-import { AnalyticsError, TimeoutError } from './errors'
-import { RequestContext } from './requestcontext'
+import { PromiseHelper } from './utilities.js'
+import { AnalyticsError, TimeoutError } from './errors.js'
+import { RequestContext } from './requestcontext.js'
 
 /**
  * Represents the behaviour of a request during retries.

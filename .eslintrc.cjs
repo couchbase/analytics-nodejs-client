@@ -27,6 +27,7 @@ module.exports = {
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
     'plugin:node/recommended',
+    'plugin:import/recommended',
     'plugin:mocha/recommended',
     'plugin:jsdoc/recommended',
     'prettier',
@@ -35,6 +36,11 @@ module.exports = {
     jsdoc: {
       ignorePrivate: true,
       ignoreInternal: true,
+    },
+    'import/resolver': {
+      typescript: {
+        alwaysTryTypes: true,
+      },
     },
   },
   rules: {
@@ -54,14 +60,8 @@ module.exports = {
         ignores: ['modules'],
       },
     ],
-
-    // Reconfigure the checker to include ts files.
-    'node/no-missing-import': [
-      'error',
-      {
-        tryExtensions: ['.js', '.ts'],
-      },
-    ],
+    'import/no-unresolved': 'error',
+    'node/no-missing-import': 'off',
     'node/no-missing-require': [
       'error',
       {

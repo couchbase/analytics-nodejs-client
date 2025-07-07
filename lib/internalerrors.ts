@@ -46,9 +46,9 @@ export class HttpStatusError extends Error {
  * @internal
  */
 export class ConnectionError extends Error {
-  private cause: Error
   private request: boolean
   private dnsRecord?: string
+  cause?: Error
 
   constructor(err: Error, request: boolean, dnsRecord?: string) {
     super(`ConnectionError: ${err.message}`)
@@ -56,13 +56,6 @@ export class ConnectionError extends Error {
     this.cause = err
     this.request = request
     this.dnsRecord = dnsRecord
-  }
-
-  /**
-   * @internal
-   */
-  get Cause(): Error {
-    return this.cause
   }
 
   /**

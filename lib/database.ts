@@ -15,8 +15,8 @@
  *  limitations under the License.
  */
 
-import { Cluster } from './cluster'
-import { Scope } from './scope'
+import { Cluster } from './cluster.js'
+import { Scope } from './scope.js'
 
 /**
  * Volatile: This API is subject to change at any time.

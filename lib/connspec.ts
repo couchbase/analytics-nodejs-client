@@ -17,7 +17,7 @@
 
 /* eslint jsdoc/require-jsdoc: off */
 
-import { CouchbaseLogger } from './logger'
+import { CouchbaseLogger } from './logger.js'
 
 const SUPPORTED_PARAMETERS = new Set([
   'timeout.connect_timeout',

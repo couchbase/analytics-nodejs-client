@@ -15,9 +15,13 @@
  *  limitations under the License.
  */
 
-import fs from 'fs'
+import * as fs from 'fs'
 import * as path from 'path'
+import { fileURLToPath } from 'url'
 
+const _filename = typeof __filename !== 'undefined'
+  ? __filename
+  : fileURLToPath(import.meta.url);
 /**
  * @internal
  */
@@ -26,7 +30,7 @@ export class Certificates {
    * @internal
    */
   public static getNonprodCertificates(): string[] {
-    const basePath = path.resolve(path.dirname(__filename), '..')
+    const basePath = path.resolve(path.dirname(_filename), '..')
     const certPath = path.join(basePath, 'dist', 'nonProdCertificates')
     const certificates: string[] = []
     fs.readdirSync(certPath).forEach((fileName) => {
@@ -39,7 +43,7 @@ export class Certificates {
    * @internal
    */
   public static getCapellaCertificates(): string[] {
-    const basePath = path.resolve(path.dirname(__filename), '..')
+    const basePath = path.resolve(path.dirname(_filename), '..')
     const certPath = path.join(basePath, 'dist', 'capellaCertificates')
     const certificates: string[] = []
     fs.readdirSync(certPath).forEach((fileName) => {
