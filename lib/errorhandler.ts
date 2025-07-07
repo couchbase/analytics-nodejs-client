@@ -47,6 +47,9 @@ export class ErrorHandler {
             context.attachErrorContext('Invalid credentials')
           )
         )
+      } else if (errs.StatusCode === 503) {
+        context.setPreviousAttemptErrors(errs)
+        return RequestBehaviour.retry()
       }
 
       return RequestBehaviour.fail(

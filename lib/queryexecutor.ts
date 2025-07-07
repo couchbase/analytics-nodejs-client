@@ -219,8 +219,7 @@ export class QueryExecutor {
 
     this._requestContext.updateGenericResContextFields(res)
 
-    // TODO: Other HTTP status codes, 50X? Unsure if we are too eagerly assuming a valid response body
-    if (res.statusCode === 401) {
+    if (res.statusCode === 401 || res.statusCode === 503) {
       res.destroy()
       return reject(new HttpStatusError(res.statusCode))
     }
