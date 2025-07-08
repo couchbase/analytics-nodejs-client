@@ -349,6 +349,11 @@ export interface QueryOptions {
   deserializer?: Deserializer
 
   /**
+   * Specifies the maximum number of retries for this query. If unset, defaults to the cluster-level maxRetries.
+   */
+  maxRetries?: number
+
+  /**
    * Sets an abort signal for the query allowing the operation to be cancelled.
    */
   abortSignal?: AbortSignal

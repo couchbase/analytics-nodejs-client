@@ -11,9 +11,9 @@ export class RequestContext {
   private _numAttempts: number
   private _maxRetryAttempts: number
 
-  constructor() {
+  constructor(maxRetryAttempts: number) {
     this._errorContext = new ErrorContext()
-    this._maxRetryAttempts = 7
+    this._maxRetryAttempts = maxRetryAttempts
     this._numAttempts = 0
   }
 

@@ -112,6 +112,11 @@ export interface ClusterOptions {
   deserializer?: Deserializer
 
   /**
+   * Specifies the default maximum number of retries for operations performed by the SDK. Defaults to 7.
+   */
+  maxRetries?: number
+
+  /**
    * Provides an implementation of the {@link Logger} interface to be used by the SDK.
    */
   logger?: Logger
@@ -129,6 +134,7 @@ export class Cluster {
   private _connectTimeout: number
   private _httpClient: HttpClient
   private _credential: Credential
+  private _maxRetries: number
   private _deserializer: Deserializer
 
   /**
@@ -143,6 +149,13 @@ export class Cluster {
      */
   get connectTimeout(): number {
     return this._connectTimeout
+  }
+
+  /**
+   * @internal
+   */
+  get maxRetries(): number {
+    return this._maxRetries
   }
 
   /**
@@ -227,6 +240,7 @@ export class Cluster {
     this._queryTimeout = options.timeoutOptions.queryTimeout || 600_000
     this._connectTimeout = options.timeoutOptions.connectTimeout || 10_000
     this._deserializer = options.deserializer || new JsonDeserializer()
+    this._maxRetries = options.maxRetries || 7
     this._httpClient = new HttpClient(
       url,
       this._credential,
@@ -281,6 +295,7 @@ export class Cluster {
     const exec = new QueryExecutor(
       this,
       options.deserializer || this._deserializer,
+      options.maxRetries || this._maxRetries,
       options.abortSignal
     )
     return exec.query(statement, options)

@@ -19,9 +19,10 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
 
-const _filename = typeof __filename !== 'undefined'
-  ? __filename
-  : fileURLToPath(import.meta.url);
+const _filename =
+  typeof __filename !== 'undefined'
+    ? __filename
+    : fileURLToPath(import.meta.url)
 /**
  * @internal
  */

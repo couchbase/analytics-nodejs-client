@@ -24,7 +24,7 @@ import {
   QueryScanConsistency,
 } from './querytypes.js'
 import * as http from 'node:http'
-import stream_json from 'stream-json';
+import stream_json from 'stream-json'
 const { parser } = stream_json
 import type { Parser } from 'stream-json'
 import { pipeline } from 'node:stream'
@@ -63,6 +63,7 @@ export class QueryExecutor {
   constructor(
     cluster: Cluster,
     deserializer: Deserializer,
+    maxRetries: number,
     signal?: AbortSignal,
     databaseName?: string,
     scopeName?: string
@@ -71,7 +72,7 @@ export class QueryExecutor {
     this._databaseName = databaseName
     this._scopeName = scopeName
     this._deserializer = deserializer
-    this._requestContext = new RequestContext()
+    this._requestContext = new RequestContext(maxRetries)
     this._abortController = new AbortController()
     this._signal = signal
       ? AbortSignal.any([this._abortController.signal, signal])

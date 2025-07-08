@@ -75,6 +75,7 @@ export class Scope {
     const exec = new QueryExecutor(
       this.cluster,
       options.deserializer || this.cluster.deserializer,
+      options.maxRetries || this.cluster.maxRetries,
       options.abortSignal,
       this._database.name,
       this._name
