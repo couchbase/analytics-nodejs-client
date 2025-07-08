@@ -34,16 +34,16 @@ export class RequestContext {
   /**
    * @internal
    */
-  incrementAttempt(): void {
-    this._numAttempts++
-    this._errorContext.numAttempts = this._numAttempts
+  get maxRetryAttempts(): number {
+    return this._maxRetryAttempts
   }
 
   /**
    * @internal
    */
-  retriesExceeded(): boolean {
-    return this._numAttempts > this._maxRetryAttempts
+  incrementAttempt(): void {
+    this._numAttempts++
+    this._errorContext.numAttempts = this._numAttempts
   }
 
   /**
@@ -73,13 +73,6 @@ export class RequestContext {
   /**
    * @internal
    */
-  setPreviousAttemptErrors(errors: any): void {
-    this._errorContext.previousAttemptErrors = errors
-  }
-
-  /**
-   * @internal
-   */
   pushOtherServerErrors(...errors: any): void {
     this._errorContext.otherServerErrors.push(errors)
   }
@@ -89,5 +82,14 @@ export class RequestContext {
    */
   attachErrorContext(message: string): string {
     return `${message}. ${this._errorContext.toString()}`
+  }
+
+  /**
+   * @internal
+   */
+  addPreviousAttemptErrorToContext(errors: any): void {
+    if (errors) {
+      this._errorContext.previousAttemptErrors = errors
+    }
   }
 }

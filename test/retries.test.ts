@@ -18,7 +18,7 @@
 import { assert } from 'chai'
 import { runWithRetry, RequestBehaviour } from '../lib/retries.js'
 import { harness } from './harness.js'
-import { TimeoutError } from '../lib/errors.js'
+import {AnalyticsError, TimeoutError} from '../lib/errors.js'
 import { RequestContext } from '../lib/requestcontext.js'
 
 describe('#Retries', function () {
@@ -36,12 +36,17 @@ describe('#Retries', function () {
 
     const evaluate = (err: Error) => {
       if (err.message === 'Temporary failure') {
-        return RequestBehaviour.retry()
+        return RequestBehaviour.retry(err)
       }
       return RequestBehaviour.fail(err)
     }
 
-    const result = await runWithRetry(fn, evaluate, Date.now() + 50000, new RequestContext("test"))
+    const result = await runWithRetry(
+      fn,
+      evaluate,
+      Date.now() + 50000,
+      new RequestContext(7)
+    )
     assert.equal(result, 'success')
     assert.equal(callCount, failAttempts + 1)
   })
@@ -51,10 +56,15 @@ describe('#Retries', function () {
       throw new Error('Temporary failure')
     }
 
-    const evaluate = () => RequestBehaviour.retry()
+    const evaluate = (err: any) => RequestBehaviour.retry(err)
 
     await harness.throwsHelper(async () => {
-      await runWithRetry(fn, evaluate, Date.now() + 500, new RequestContext("test"))
+      await runWithRetry(
+        fn,
+        evaluate,
+        Date.now() + 500,
+        new RequestContext(7)
+      )
     }, TimeoutError)
   })
 
@@ -68,9 +78,44 @@ describe('#Retries', function () {
     const evaluate = (err: Error) => RequestBehaviour.fail(err)
 
     await harness.throwsHelper(async () => {
-      await runWithRetry(fn, evaluate, Date.now() + 500, new RequestContext("test"))
+      await runWithRetry(
+        fn,
+        evaluate,
+        Date.now() + 500,
+        new RequestContext(7)
+      )
     }, Error)
 
     assert.equal(callCount, 1)
+  })
+
+  it('should fail with the final error if retries are exceeded', async function () {
+    this.timeout(5000)
+
+    let callCount = 0
+    const context = new RequestContext(3)
+
+    const fn = async (): Promise<never> => {
+      callCount++
+      throw new Error('Temporary failure')
+    }
+
+    const evaluate = (errs: any) => {
+      return RequestBehaviour.retry(errs)
+    }
+
+    try {
+        await runWithRetry(
+            fn,
+            evaluate,
+            Date.now() + 5000,
+            context
+        )
+      assert(false)
+    } catch (e) {
+      assert.instanceOf(e, Error)
+      assert.include(e.message, 'Temporary failure')
+      assert.equal(callCount, 4)
+    }
   })
 })

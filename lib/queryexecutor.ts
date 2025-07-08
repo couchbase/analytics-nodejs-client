@@ -179,7 +179,7 @@ export class QueryExecutor {
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
         reject(
-          new ConnectionError(err, true, requestOptions.hostname as string)
+          new ConnectionError(err, true)
         )
       })
 
@@ -189,7 +189,7 @@ export class QueryExecutor {
         )
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
-        reject(new InternalConnectionTimeout(requestOptions.hostname as string))
+        reject(new InternalConnectionTimeout())
       })
 
       this._attachConnectTimeout(req)
@@ -219,9 +219,8 @@ export class QueryExecutor {
 
     this._requestContext.updateGenericResContextFields(res)
 
-    if (res.statusCode === 401 || res.statusCode === 503) {
-      res.destroy()
-      return reject(new HttpStatusError(res.statusCode))
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      return this._handleNonSuccessfulStatusCode(res, reject)
     }
 
     const jsonTokenizer: Parser = parser()
@@ -269,6 +268,37 @@ export class QueryExecutor {
             )
           )
         )
+    })
+  }
+
+  private _handleNonSuccessfulStatusCode(
+    res: http.IncomingMessage,
+    reject: (err: any) => void
+  ): void {
+    CouchbaseLogger.error(
+      `Received non-successful status code from the server: ${res.statusCode}. clientContextId=${this._clientContextId}`
+    )
+
+    if (res.statusCode === 401) {
+      res.destroy()
+      return reject(new HttpStatusError(res.statusCode))
+    }
+
+    let raw = ''
+    res.on('data', (chunk) => (raw += chunk))
+    res.on('end', () => {
+      let parsed: any = null
+      try {
+        parsed = JSON.parse(raw)
+      } catch (e) {
+        if (res.statusCode === 503) {
+          return reject(new HttpStatusError(res.statusCode))
+        }
+      }
+
+      if (parsed && parsed.errors && Array.isArray(parsed.errors)) {
+        return reject(parsed.errors)
+      }
     })
   }
 

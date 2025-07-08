@@ -350,6 +350,8 @@ export interface QueryOptions {
 
   /**
    * Specifies the maximum number of retries for this query. If unset, defaults to the cluster-level maxRetries.
+   *
+   * Volatile: This API is subject to change at any time.
    */
   maxRetries?: number
 

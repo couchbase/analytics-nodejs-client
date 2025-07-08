@@ -24,7 +24,6 @@ import {
 } from './errors.js'
 import {
   ConnectionError,
-  DnsRecordsExhaustedError,
   HttpStatusError,
   InternalConnectionTimeout,
 } from './internalerrors.js'
@@ -41,15 +40,18 @@ export class ErrorHandler {
    */
   static handleErrors(errs: any, context: RequestContext): RequestBehaviour {
     if (errs instanceof HttpStatusError) {
-      if (errs.StatusCode === 401) {
+      if (errs.statusCode === 401) {
         return RequestBehaviour.fail(
           new InvalidCredentialError(
             context.attachErrorContext('Invalid credentials')
           )
         )
-      } else if (errs.StatusCode === 503) {
-        context.setPreviousAttemptErrors(errs)
-        return RequestBehaviour.retry()
+      } else if (errs.statusCode === 503) {
+        return RequestBehaviour.retry(new AnalyticsError(
+            context.attachErrorContext(
+                'The server returned a 503 Service Unavailable error. This is likely a temporary issue.'
+            )
+        ))
       }
 
       return RequestBehaviour.fail(
@@ -62,20 +64,18 @@ export class ErrorHandler {
     } else if (errs instanceof TimeoutError) {
       return RequestBehaviour.fail(errs)
     } else if (errs instanceof InternalConnectionTimeout) {
-      context.setPreviousAttemptErrors(errs)
-      return RequestBehaviour.retry()
-    } else if (errs instanceof DnsRecordsExhaustedError) {
-      return RequestBehaviour.fail(
-        new AnalyticsError(
+      return RequestBehaviour.retry(new TimeoutError(
           context.attachErrorContext(
-            'Attempted to perform query on every resolved DNS record, but all of them failed to connect.'
+              "Timed out attempting to establish a connection to a Node within the connectTimeout period."
           )
-        )
-      )
+      ))
     } else if (errs instanceof ConnectionError) {
       if (this._isRetriableConnectionError(errs)) {
-        context.setPreviousAttemptErrors(errs)
-        return RequestBehaviour.retry()
+        return RequestBehaviour.retry(new AnalyticsError(
+            context.attachErrorContext(
+                `Got a retriable connection error from the HTTP library, details: ${errs.cause}`
+            )
+        ))
       }
 
       return RequestBehaviour.fail(
@@ -95,7 +95,7 @@ export class ErrorHandler {
 
     return RequestBehaviour.fail(
       new AnalyticsError(
-        context.attachErrorContext(`Error received: ${String(errs)}`)
+        context.attachErrorContext(`Unknown Error received: ${String(errs)}`)
       )
     )
   }
@@ -134,7 +134,6 @@ export class ErrorHandler {
     const selectedError = firstNonRetriableError || firstRetriableError
 
     if (!selectedError) {
-      context.pushOtherServerErrors(...errors)
       return RequestBehaviour.fail(
         new AnalyticsError(
           context.attachErrorContext('Server returned an empty error array')
@@ -144,10 +143,6 @@ export class ErrorHandler {
 
     if (selectedError.code === 20000) {
       addRemainingErrorsToContext()
-      context.pushOtherServerErrors(
-        ...errors.filter((_, i) => parsedErrors[i] !== selectedError)
-      )
-
       return RequestBehaviour.fail(
         new InvalidCredentialError(
           context.attachErrorContext(
@@ -165,8 +160,14 @@ export class ErrorHandler {
         )
       )
     } else if (firstRetriableError && !firstNonRetriableError) {
-      context.setPreviousAttemptErrors(errors)
-      return RequestBehaviour.retry()
+      addRemainingErrorsToContext()
+      return RequestBehaviour.retry(new QueryError(
+          context.attachErrorContext(
+              `Retriable server-side query error occurred: Server message: ${selectedError.msg}. Server error code: ${selectedError.code}`
+          ),
+          selectedError.msg,
+          selectedError.code
+      ))
     } else {
       addRemainingErrorsToContext()
       return RequestBehaviour.fail(
