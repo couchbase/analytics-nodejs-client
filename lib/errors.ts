@@ -42,7 +42,7 @@ export class InvalidCredentialError extends AnalyticsError {
 }
 
 /**
- * Indicates that an interaction with the Columnar cluster does not complete before its timeout expires.
+ * Indicates that an interaction with the Analytics cluster does not complete before its timeout expires.
  *
  * @category Error Handling
  */
@@ -73,6 +73,13 @@ export class QueryError extends AnalyticsError {
     super(message)
     this.serverMessage = serverMessage
     this.code = code
+  }
+
+  /**
+   * @internal
+   */
+  addMessagePrefix(prefix: string): void {
+    this.message = prefix + this.message
   }
 }
 

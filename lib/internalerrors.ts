@@ -1,20 +1,11 @@
 /**
- * Indicates that we failed to connect to a node within the timeout period.
+ * Indicates that we failed to connect to a node within the timeout period, but still want to retry if possible.
  *
  * @internal
  */
 export class InternalConnectionTimeout extends Error {
-  private dnsRecord: string
-  constructor(dnsRecord: string) {
+  constructor() {
     super('Timed out waiting to connect to node')
-    this.dnsRecord = dnsRecord
-  }
-
-  /**
-   * @internal
-   */
-  get DnsRecord(): string {
-    return this.dnsRecord
   }
 }
 
@@ -24,19 +15,19 @@ export class InternalConnectionTimeout extends Error {
  * @internal
  */
 export class HttpStatusError extends Error {
-  private statusCode: number
+  private _statusCode: number
 
   constructor(statusCode: number) {
     super('HttpStatusCode error: ' + statusCode)
     this.name = this.constructor.name
-    this.statusCode = statusCode
+    this._statusCode = statusCode
   }
 
   /**
    * @internal
    */
-  get StatusCode(): number {
-    return this.statusCode
+  get statusCode(): number {
+    return this._statusCode
   }
 }
 
@@ -47,15 +38,13 @@ export class HttpStatusError extends Error {
  */
 export class ConnectionError extends Error {
   private request: boolean
-  private dnsRecord?: string
   cause?: Error
 
-  constructor(err: Error, request: boolean, dnsRecord?: string) {
+  constructor(err: Error, request: boolean) {
     super(`ConnectionError: ${err.message}`)
     this.name = this.constructor.name
     this.cause = err
     this.request = request
-    this.dnsRecord = dnsRecord
   }
 
   /**
@@ -63,23 +52,6 @@ export class ConnectionError extends Error {
    */
   get isRequestError(): boolean {
     return this.request
-  }
-
-  /**
-   * @internal
-   */
-  get DnsRecord(): string | undefined {
-    return this.dnsRecord
-  }
-}
-
-/**
- * @internal
- */
-export class DnsRecordsExhaustedError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = this.constructor.name
   }
 }
 

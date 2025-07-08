@@ -16,7 +16,7 @@
  */
 
 import { PromiseHelper } from './utilities.js'
-import { AnalyticsError, TimeoutError } from './errors.js'
+import { TimeoutError } from './errors.js'
 import { RequestContext } from './requestcontext.js'
 
 /**
@@ -25,15 +25,20 @@ import { RequestContext } from './requestcontext.js'
  * @internal
  */
 export class RequestBehaviour {
-  private constructor(public readonly error: Error | null) {
+  public readonly error: Error
+  public readonly retry: boolean
+  private constructor(error: Error, retry: boolean) {
+    this.retry = retry
     this.error = error
   }
 
   /**
    * Creates a new RequestBehaviour instance indicating that the request should be retried.
+   *
+   * @param err The error the caused the retry.
    */
-  static retry(): RequestBehaviour {
-    return new RequestBehaviour(null)
+  static retry(err: Error): RequestBehaviour {
+    return new RequestBehaviour(err, true)
   }
 
   /**
@@ -42,21 +47,21 @@ export class RequestBehaviour {
    * @param err The error that caused the failure.
    */
   static fail(err: Error): RequestBehaviour {
-    return new RequestBehaviour(err)
+    return new RequestBehaviour(err, false)
   }
 
   /**
    * Indicates whether the request should be retried.
    */
   shouldRetry(): boolean {
-    return this.error === null
+    return this.retry
   }
 
   /**
    * Returns the error that caused the request to fail.
    */
   getError(): Error {
-    return this.error!
+    return this.error
   }
 }
 
@@ -75,39 +80,48 @@ export async function runWithRetry<T>(
   deadline: number,
   requestContext: RequestContext
 ): Promise<T> {
-  for (;;) {
-    requestContext.incrementAttempt()
+  let lastErr: Error | null = null
+
+  for (let retryIdx = 0; retryIdx <= requestContext.maxRetryAttempts; retryIdx++) {
     const remainingTime = deadline - Date.now()
     if (remainingTime <= 0) {
+      requestContext.addPreviousAttemptErrorToContext(lastErr)
       throw new TimeoutError(
-        requestContext.attachErrorContext('Query timeout exceeded during retry')
-      )
-    }
-    if (requestContext.retriesExceeded()) {
-      throw new AnalyticsError(
-        requestContext.attachErrorContext('Max retry attempts exceeded')
+          requestContext.attachErrorContext('Query timeout exceeded')
       )
     }
 
     try {
+      requestContext.incrementAttempt()
       return await PromiseHelper.promiseWithTimeout(fn(), remainingTime)
     } catch (err) {
+      // TimeoutError from promiseWithTimeout is handled separately
+      if (err instanceof TimeoutError) {
+        requestContext.addPreviousAttemptErrorToContext(lastErr)
+        throw err
+      }
+
       const behaviour = evaluate(err)
-      if (behaviour.shouldRetry()) {
-        const delay = calculateBackoff(requestContext.numAttempts)
-        if (Date.now() + delay > deadline) {
-          throw new TimeoutError(
-            requestContext.attachErrorContext(
-              'Query timeout will exceed during retry backoff'
-            )
-          )
-        }
-        await sleep(delay)
-      } else {
+      if (!behaviour.shouldRetry()) {
         throw behaviour.getError()
       }
+
+      lastErr = behaviour.getError()
     }
+
+    const delay = calculateBackoff(requestContext.numAttempts)
+    if (Date.now() + delay > deadline) {
+      requestContext.addPreviousAttemptErrorToContext(lastErr)
+      throw new TimeoutError(
+          requestContext.attachErrorContext(
+              'Query timeout will exceed during retry backoff'
+          )
+      )
+    }
+    await sleep(delay)
   }
+
+  throw lastErr
 }
 
 /**

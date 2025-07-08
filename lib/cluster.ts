@@ -113,6 +113,8 @@ export interface ClusterOptions {
 
   /**
    * Specifies the default maximum number of retries for operations performed by the SDK. Defaults to 7.
+   *
+   * Volatile: This API is subject to change at any time.
    */
   maxRetries?: number
 
