@@ -1,0 +1,212 @@
+name: publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "The git SHA to use for release.  Only set if needing to publish"
+        required: true
+        default: ""
+        type: string
+      version:
+        description: "The Release version.  Allowed format: x.y.z"
+        required: true
+        default: ""
+        type: string
+      publish_dryrun:
+        description: "Set to true to in order to do a npm publish dry run."
+        required: false
+        default: true
+        type: boolean
+      npm_tag:
+        description: "The tag value to use to publish to npm."
+        required: false
+        default: ""
+        type: choice
+        options:
+          - ''
+          - dev
+          - beta
+          - rc
+      test_input:
+        description: "JSON formatted object representing test input."
+        required: false
+        default: ""
+        type: string
+      publish_input:
+        description: "JSON formatted object representing publish options."
+        required: false
+        default: "{\"PUBLISH_NPM\": true, \"PUBLISH_API_DOCS\": true, \"SKIP_TESTS\": false}"
+        type: string
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  validate-input:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Verify SHA is provided
+        if: inputs.sha == ''
+        run: |
+          echo "::error Must provide a SHA."
+          exit 1
+      - name: Verify SHA is correct length
+        if: inputs.sha != ''
+        run: |
+          echo '"${{ inputs.sha }}"' | jq -e '. | length == 40'
+      - name: Verify version is provided
+        if: inputs.version == ''
+        run: |
+          echo "::error Must provide a version."
+          exit 1
+
+  output-publish-params:
+    runs-on: ubuntu-22.04
+    needs: validate-input
+    outputs:
+      publish_npm: ${{ steps.output-publish-params.outputs.publish_npm }}
+      publish_api_docs: ${{ steps.output-publish-params.outputs.publish_api_docs }}
+      skip_tests: ${{ steps.output-publish-params.outputs.skip_tests }}
+    steps:
+      - name: Output Publish parameters
+        id: output-publish-params
+        run: |
+          export $(echo '${{ inputs.publish_input }}' | jq -r '. | to_entries[] | join("=")')
+          echo "PUBLISH_NPM=$PUBLISH_NPM"
+          echo "PUBLISH_API_DOCS=$PUBLISH_API_DOCS"
+          echo "SKIP_TESTS=$SKIP_TESTS"
+          echo "publish_npm=$PUBLISH_NPM" >> $GITHUB_OUTPUT
+          echo "publish_api_docs=$PUBLISH_API_DOCS" >> $GITHUB_OUTPUT
+          echo "skip_tests=$SKIP_TESTS" >> $GITHUB_OUTPUT
+
+  tests:
+    needs: output-publish-params
+    if: |
+      always()
+      && needs.output-publish-params.result == 'success'
+      && needs.output-publish-params.outputs.skip_tests == 'false'
+    uses: ./.github/workflows/tests.yml
+    with:
+      is_release: true
+      test_input: ${{ inputs.test_input && inputs.test_input || '' }}
+
+  upload-api-docs:
+    name: Upload API docs as artifact
+    needs: tests
+    if: |
+      always()
+      && (needs.tests.result == 'success' || needs.tests.result == 'skipped')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        if: inputs.sha != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Confirm Node version
+        run: |
+          node --version
+          node -p "process.arch"
+      - name: Install dependencies
+        run: |
+          npm ci --ignore-scripts
+          mkdir -p build/Release
+      - name: Build docs
+        run: |
+          ls -alh
+          ls -alh build/Release
+          npm run build-docs
+          ls -alh docs
+      - name: Upload Node.js API docs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          retention-days: 1
+          name: ncbac-api-docs
+          path: docs/
+
+  publish-npm:
+    runs-on: ubuntu-22.04
+    needs: [tests, output-publish-params]
+    environment: publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+      - name: Confirm Node version
+        run: |
+          node --version
+          node -p "process.arch"
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Publish to npm
+        run: |
+          if [ "${{ inputs.publish_dryrun }}" = "true" ]; then
+            npm publish --access public --dry-run
+          else
+            if [ "${{ inputs.npm_tag }}" != "" ]; then
+              npm publish --access public --tag ${{ inputs.npm_tag }}
+            else
+              npm publish --access public
+            fi
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  validate-npm:
+    name: Validate SDK on npm
+    needs: publish-npm
+    if: |
+      always()
+      && needs.publish-npm.result == 'success'
+      && needs.publish-npm.result != 'skipped'
+    uses: ./.github/workflows/verify_release.yml
+    with:
+      version: ${{ inputs.version }}
+      npm_tag: ${{ inputs.npm_tag }}
+      test_input: ${{ inputs.test_input }}
+
+  publish-api-docs:
+    name: Publish SDK API docs
+    needs: [upload-api-docs, tests, output-publish-params, validate-npm]
+    environment: publish
+    permissions:
+      id-token: write
+      contents: read
+    if: |
+      always()
+      && (needs.tests.result == 'success' || needs.tests.result == 'skipped')
+      && (needs.validate-npm.result == 'success' || needs.validate-npm.result == 'skipped')
+      && needs.output-publish-params.result == 'success'
+      && needs.output-publish-params.outputs.publish_api_docs == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download API docs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ncbac-api-docs
+          path: docs
+      - name: Setup AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: arn:aws:iam::786014483886:role/SDK_GHA
+          aws-region: us-west-1
+      - name: Upload to S3
+        run: |
+          ls -alh ./docs
+          aws s3 cp ./docs s3://docs.couchbase.com/sdk-api/analytics-nodejs-client-$SDK_VERSION/ --recursive --acl public-read
+        env:
+          SDK_VERSION: ${{ inputs.version }}

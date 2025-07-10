@@ -18,16 +18,15 @@
 import { setTimeout } from 'node:timers/promises'
 import { assert } from 'chai'
 import { harness } from './harness.js'
-import { Cluster, Scope } from '../lib/analytics.js'
 import {
+  Cluster,
+  Scope,
   QueryMetadata,
   QueryMetrics,
   QueryScanConsistency,
-} from '../lib/querytypes.js'
-import {
   PassthroughDeserializer,
   JsonDeserializer,
-} from '../lib/deserializers.js'
+} from '../lib/analytics.js'
 
 function genericTests(instance: () => Cluster | Scope) {
   describe('#queryTests', function () {
@@ -47,23 +46,25 @@ function genericTests(instance: () => Cluster | Scope) {
 
     it('should successfully stream rows using events', async function () {
       const eventStreamQuery = (qRes: any) => {
-        return new Promise<{ rows: any[]; meta: QueryMetadata }>((resolve, reject) => {
-          const results: any[] = []
-          const readable = qRes.rows()
-          readable.on('data', (row: any) => {
-            results.push(row)
-          })
-          readable.on('end', () => {
-            const metadata = qRes.metadata()
-            resolve({
-              rows: results,
-              meta: metadata,
+        return new Promise<{ rows: any[]; meta: QueryMetadata }>(
+          (resolve, reject) => {
+            const results: any[] = []
+            const readable = qRes.rows()
+            readable.on('data', (row: any) => {
+              results.push(row)
             })
-          })
-          readable.on('error', (err: Error) => {
-            reject(err)
-          })
-        })
+            readable.on('end', () => {
+              const metadata = qRes.metadata()
+              resolve({
+                rows: results,
+                meta: metadata,
+              })
+            })
+            readable.on('error', (err: Error) => {
+              reject(err)
+            })
+          }
+        )
       }
 
       const qs = `FROM RANGE(1, 100) AS i SELECT *`
@@ -223,7 +224,9 @@ function genericTests(instance: () => Cluster | Scope) {
 
       assert.isAtLeast(results.length, 2)
 
-      const testDatabase = results.find((db) => db.DatabaseName === harness.d!.name)
+      const testDatabase = results.find(
+        (db) => db.DatabaseName === harness.d!.name
+      )
       const systemDatabase = results.find((db) => db.DatabaseName === 'System')
 
       assert.isNotNull(systemDatabase)
@@ -326,4 +329,8 @@ function genericTests(instance: () => Cluster | Scope) {
 
 describe('#Columnar query - cluster', function () {
   genericTests(() => harness.c)
+})
+
+describe('#Columnar query - scope', function ()  {
+    genericTests(() => harness.s)
 })
