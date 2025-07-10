@@ -15,10 +15,13 @@
  *  limitations under the License.
  */
 
-import { assert } from 'chai';
-import { harness }  from './harness.js'
-import { PassthroughDeserializer } from '../lib/deserializers.js'
-import { createInstance, ClusterOptions } from '../lib/analytics.js'
+import { assert } from 'chai'
+import { harness } from './harness.js'
+import {
+  createInstance,
+  ClusterOptions,
+  PassthroughDeserializer,
+} from '../lib/analytics.js'
 
 describe('#Cluster', function () {
   it('should correctly set timeouts', function () {
@@ -47,11 +50,7 @@ describe('#Cluster', function () {
     }
 
     await harness.throwsHelper(() => {
-      return createInstance(
-        harness.connStr!,
-        harness.credentials,
-        options
-      )
+      return createInstance(harness.connStr!, harness.credentials, options)
     }, Error)
   })
 
@@ -63,11 +62,7 @@ describe('#Cluster', function () {
     }
 
     await harness.throwsHelper(() => {
-      return createInstance(
-        harness.connStr!,
-        harness.credentials,
-        options
-      )
+      return createInstance(harness.connStr!, harness.credentials, options)
     }, Error)
   })
 
@@ -80,11 +75,7 @@ describe('#Cluster', function () {
     }
 
     await harness.throwsHelper(() => {
-      return createInstance(
-        harness.connStr!,
-        harness.credentials,
-        options
-      )
+      return createInstance(harness.connStr!, harness.credentials, options)
     }, Error)
   })
 
@@ -101,4 +92,3 @@ describe('#Cluster', function () {
     assert.instanceOf(cluster.deserializer, PassthroughDeserializer)
   })
 })
-

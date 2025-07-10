@@ -81,13 +81,9 @@
     "build-docs": "typedoc",
     "build": "tsup lib/analytics.ts --format cjs,esm --dts --clean --sourcemap",
     "check-types": "npx --yes @arethetypeswrong/cli --pack .",
-    "test:esm": "ts-mocha --esm --loader ts-node/esm test/*.test.ts",
-    "test:cjs": "npm run build && ts-mocha --require ts-node/register test/**/*.ts",
     "test": "ts-mocha test/*.test.ts",
-    "test-fast": "ts-mocha test/*.test.* -ig '(slow)'",
     "cover": "nyc ts-mocha test/*.test.*",
-    "cover-fast": "nyc ts-mocha test/*.test.* -ig '(slow)'",
-    "lint": "eslint ./lib/",
+    "lint": "eslint ./lib/ --max-warnings=0",
     "check-deps": "ncu"
   },
   "mocha": {

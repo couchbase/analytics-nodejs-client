@@ -27,10 +27,8 @@ import {
   Database,
   Scope,
   Credential,
-  ClusterOptions,
   createInstance,
   Certificates,
-
 } from '../lib/analytics.js'
 import { fileURLToPath } from 'url'
 
@@ -107,8 +105,8 @@ const TEST_CONFIG: TestConfig = {
   database: 'Default',
   scope: 'Default',
   collection: 'Default',
-  nonprod: true,
-  disableCertVerification: false,
+  nonprod: false,
+  disableCertVerification: true,
   features: [],
 }
 
@@ -171,11 +169,16 @@ if (configIni && configIni.nonprod !== undefined) {
 if (configIni && configIni.disable_cert_verification !== undefined) {
   TEST_CONFIG.disableCertVerification = configIni.disable_cert_verification
 } else if (process.env.NCBACDISABLECERTVERIFICATION !== undefined) {
-  TEST_CONFIG.disableCertVerification = process.env.NCBACDISABLECERTVERIFICATION === 'true'
+  TEST_CONFIG.disableCertVerification =
+    process.env.NCBACDISABLECERTVERIFICATION === 'true'
 }
 
 if ((configIni && configIni.features) || process.env.NCBACFEAT !== undefined) {
-  const featureStrs = (configIni?.features || process.env.NCBACFEAT || '').split(',')
+  const featureStrs = (
+    configIni?.features ||
+    process.env.NCBACFEAT ||
+    ''
+  ).split(',')
   featureStrs.forEach((featureStr: string) => {
     const featureName = featureStr.substr(1)
 
@@ -231,6 +234,8 @@ class Harness {
         'Connection string is not set, integration tests will not be run'
       )
       this._integrationEnabled = false
+      // Set to localhost to allow unit tests to run
+      this._connstr = 'http://localhost'
     }
 
     this._testKey = crypto.randomUUID()
@@ -320,7 +325,10 @@ class Harness {
     try {
       await this.maybeCreateDatabase(scope.database)
       const qs = `CREATE SCOPE \`${scope.database.name}\`.\`${scope.name}\` IF NOT EXISTS`
-      await scope.database.cluster.executeQuery(qs)
+      let res = await scope.database.cluster.executeQuery(qs)
+      for await (const _ of res.rows()) {
+        // do nothing
+      }
     } catch (e) {
       console.warn('Failed maybe creating scope/database: ' + e)
     }
@@ -329,7 +337,10 @@ class Harness {
   async maybeCreateDatabase(database: Database): Promise<void> {
     if (database.name !== 'Default') {
       const qs = `CREATE DATABASE \`${database.name}\` IF NOT EXISTS`
-      await database.cluster.executeQuery(qs)
+      let res = await database.cluster.executeQuery(qs)
+      for await (const _ of res.rows()) {
+        // do nothing
+      }
     }
   }
 
@@ -350,8 +361,7 @@ class Harness {
     if (this.nonprod) {
       return createInstance(options.connstr!, credential, {
         securityOptions: {
-          trustOnlyCertificates:
-            Certificates.getNonprodCertificates(),
+          trustOnlyCertificates: Certificates.getNonprodCertificates(),
         },
       })
     } else if (this.disableCertVerification) {
@@ -432,12 +442,13 @@ const harness = new Harness()
 
 // Hook registration with Mocha
 // These use traditional function syntax due to timeout requirements
-before(function(done) {
+before(function (done) {
   this.timeout(30000)
   harness.prepare().then(done).catch(done)
 })
 
-after(function(done) {
+
+after(function (done) {
   this.timeout(10000)
   harness.cleanup().then(done).catch(done)
 })
