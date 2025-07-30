@@ -3,14 +3,16 @@ Node.js client for [Couchbase](https://couchbase.com) Analytics
 
 # Installing the SDK<a id="installing-the-sdk"></a>
 
+Until a version is available on npm, the SDK can be installed with the following command.
+
 Install the SDK via `npm`:
 ```console
-npm install couchbase-analytics
+npm install https://github.com/couchbaselabs/analytics-nodejs-client
 ```
 
 # Using the SDK<a id="using-the-sdk"></a>
 
-Some more examples are provided in the [examples directory](https://github.com/couchbaselabs/analytics-nodejs-client/tree/main/examples).
+Some more examples are provided in the [examples directory](https://github.com/couchbaselabs/analytics-nodejs-client/tree/dev/examples).
 
 ## CommonJS
 **Connecting and executing a query**
@@ -19,13 +21,16 @@ const analytics = require('couchbase-analytics')
 
 async function main() {
   // Update this to your cluster
+  // IMPORTANT:  The appropriate port needs to be specified. The SDK's default ports are 80 (http) and 443 (https).
+  //             If attempting to connect to Capella, the correct ports are most likely to be 8095 (http) and 18095 (https).
+  //             Capella example: https://cb.2xg3vwszqgqcrsix.cloud.couchbase.com:18095
   const clusterEndpoint = 'https://--your-instance--'
   const username = 'username'
   const password = 'password'
   // User Input ends here.
 
   const credential = new analytics.Credential(username, password)
-  const cluster = analytics.createInstance(clusterConnStr, credential)
+  const cluster = analytics.createInstance(clusterEndpoint, credential)
 
   // Execute a streaming query with positional arguments.
   let qs = 'SELECT * FROM `travel-sample`.inventory.airline LIMIT 10;'
@@ -75,13 +80,16 @@ import { Certificates, Credential, createInstance } from "couchbase-analytics"
 
 async function main() {
   // Update this to your cluster
-  const clusterConnStr = 'https://--your-instance--'
+  // IMPORTANT:  The appropriate port needs to be specified. The SDK's default ports are 80 (http) and 443 (https).
+  //             If attempting to connect to Capella, the correct ports are most likely to be 8095 (http) and 18095 (https).
+  //             Capella example: https://cb.2xg3vwszqgqcrsix.cloud.couchbase.com:18095
+  const clusterEndpoint = 'https://--your-instance--'
   const username = 'username'
   const password = 'password'
   // User Input ends here.
 
   const credential = new Credential(username, password)
-  const cluster = createInstance(clusterConnStr, credential)
+  const cluster = createInstance(clusterEndpoint, credential)
 
   // Execute a streaming query with positional arguments.
   let qs = "SELECT * FROM `travel-sample`.inventory.airline LIMIT 10;"
