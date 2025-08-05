@@ -104,7 +104,7 @@ export class ErrorHandler {
    * @internal
    */
   private static _parseServerErrors(
-    errors: string[],
+    errors: string[] | object[],
     context: RequestContext
   ): RequestBehaviour {
     const addRemainingErrorsToContext = () => {
@@ -117,7 +117,8 @@ export class ErrorHandler {
     let firstNonRetriableError: any = null
     let firstRetriableError: any = null
 
-    const parsedErrors = errors.map((err) => JSON.parse(err))
+    // Each error will be a string if they come from the json streamer, or an object if they've already been parsed on a non-successful status code
+    const parsedErrors = errors.map((err) => typeof err === 'string' ? JSON.parse(err) : err)
 
     for (const jsonErr of parsedErrors) {
       const retriable = 'retriable' in jsonErr ? jsonErr.retriable : false
