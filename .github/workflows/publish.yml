@@ -13,6 +13,11 @@ on:
         required: true
         default: ""
         type: string
+      tests_run_id:
+        description: "The workflow run ID of a tests workflow run.  Set if wanting to use artifacts from an already completed run."
+        required: false
+        default: ""
+        type: string
       publish_dryrun:
         description: "Set to true to in order to do a npm publish dry run."
         required: false
@@ -77,13 +82,11 @@ jobs:
 
   tests:
     needs: output-publish-params
-    if: |
-      always()
-      && needs.output-publish-params.result == 'success'
-      && needs.output-publish-params.outputs.skip_tests == 'false'
+    if: ${{ inputs.tests_run_id == '' && needs.output-publish-params.outputs.skip_tests == 'false' }}
     uses: ./.github/workflows/tests.yml
     with:
       is_release: true
+      sha: ${{ inputs.sha && inputs.sha || '' }}
 
   upload-api-docs:
     name: Upload API docs as artifact
@@ -141,9 +144,16 @@ jobs:
         run: |
           node --version
           node -p "process.arch"
+      - name: Set version
+        if: ${{ inputs.is_release }}
+        env:
+          NCBAC_VERSION: ${{ inputs.version }}
+        run: |
+          echo "NCBAC_VERSION=$NCBAC_VERSION"
+          node -e "var x = JSON.parse(fs.readFileSync('package.json')); x.version = '$NCBAC_VERSION'; fs.writeFileSync('package.json', JSON.stringify(x));"
+          node -e "var x = JSON.parse(fs.readFileSync('package-lock.json')); x.version = '$NCBAC_VERSION'; fs.writeFileSync('package-lock.json', JSON.stringify(x));"
       - name: Install dependencies
         run: npm ci --ignore-scripts
-
       - name: Publish to npm
         run: |
           if [ "${{ inputs.publish_dryrun }}" = "true" ]; then

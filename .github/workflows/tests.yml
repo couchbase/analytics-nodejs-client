@@ -1,4 +1,5 @@
-name: Run Tests
+name: tests
+
 on:
   push:
     branches:
@@ -18,6 +19,11 @@ on:
         required: false
         default: ""
         type: string
+      version:
+        description: "The Release version.  Allowed format: x.y.z"
+        required: false
+        default: ""
+        type: string
   workflow_call:
     inputs:
       is_release:
@@ -30,6 +36,15 @@ on:
         required: false
         default: ""
         type: string
+      version:
+        description: "The Release version.  Allowed format: x.y.z"
+        required: false
+        default: ""
+        type: string
+    outputs:
+      workflow_run_id:
+        description: "The workflow run ID"
+        value: ${{ github.run_id }}
 
 jobs:
   validate-input:
@@ -71,7 +86,15 @@ jobs:
     runs-on: ubuntu-22.04
     needs: [validate-input, lint]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout (with SHA)
+        if: ${{ inputs.sha != '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+          fetch-depth: 0
+      - name: Checkout (no SHA)
+        if: ${{ inputs.sha == '' }}
+        uses: actions/checkout@v4
       - name: Setup Node.js ${{ env.DEFAULT_NODE }}
         uses: actions/setup-node@v4
         with:
