@@ -128,6 +128,11 @@ jobs:
   publish-npm:
     runs-on: ubuntu-22.04
     needs: [tests, output-publish-params]
+    if: |
+      always()
+      && (needs.tests.result == 'success' || needs.tests.result == 'skipped')
+      && needs.output-publish-params.result == 'success'
+      && needs.output-publish-params.outputs.publish_npm == 'true'
     environment: publish
     permissions:
       contents: read
