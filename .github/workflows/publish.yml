@@ -28,11 +28,6 @@ on:
           - dev
           - beta
           - rc
-      test_input:
-        description: "JSON formatted object representing test input."
-        required: false
-        default: ""
-        type: string
       publish_input:
         description: "JSON formatted object representing publish options."
         required: false
@@ -89,7 +84,6 @@ jobs:
     uses: ./.github/workflows/tests.yml
     with:
       is_release: true
-      test_input: ${{ inputs.test_input && inputs.test_input || '' }}
 
   upload-api-docs:
     name: Upload API docs as artifact
@@ -116,11 +110,9 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci --ignore-scripts
-          mkdir -p build/Release
       - name: Build docs
         run: |
           ls -alh
-          ls -alh build/Release
           npm run build-docs
           ls -alh docs
       - name: Upload Node.js API docs as artifact
@@ -177,7 +169,6 @@ jobs:
     with:
       version: ${{ inputs.version }}
       npm_tag: ${{ inputs.npm_tag }}
-      test_input: ${{ inputs.test_input }}
 
   publish-api-docs:
     name: Publish SDK API docs

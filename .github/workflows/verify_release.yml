@@ -13,11 +13,6 @@ on:
         required: false
         default: ""
         type: string
-      test_input:
-        description: "JSON formatted object representing test input."
-        required: true
-        default: ""
-        type: string
   workflow_call:
     inputs:
       version:
@@ -28,11 +23,6 @@ on:
       npm_tag:
         description: "The tag to use to install the SDK."
         required: false
-        default: ""
-        type: string
-      test_input:
-        description: "JSON formatted object representing test input."
-        required: true
         default: ""
         type: string
 
@@ -48,31 +38,6 @@ jobs:
         run: |
           echo "::error Must provide a valid SDK version."
           exit 1
-      - name: Verify test input has been provided
-        if: inputs.test_input == ''
-        run: |
-          echo "::error Must provide a test input JSON object."
-          exit 1
-      - name: Validate host
-        if: ${{ inputs.test_input != '' && fromJSON(inputs.test_input).NCBACCSTR == ''}}
-        run: |
-          echo "::error must provide NCBACCSTR."
-          exit 1
-      - name: Validate user
-        if: ${{ inputs.test_input != '' && fromJSON(inputs.test_input).NCBACUSER == '' }}
-        run: |
-          echo "::error must provide NCBACUSER."
-          exit 1
-      - name: Validate password
-        if: ${{ inputs.test_input != '' && fromJSON(inputs.test_input).NCBACPASS == '' }}
-        run: |
-          echo "::error must provide NCBACPASS."
-          exit 1
-      - name: Validate FQDN
-        if: ${{ inputs.test_input != '' && fromJSON(inputs.test_input).NCBACFQDN == '' }}
-        run: |
-          echo "::error must provide NCBACFQDN."
-          exit 1
 
   test-setup:
     runs-on: ubuntu-22.04
@@ -82,24 +47,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.DEFAULT_NODE }}
-      - name: Build testConfig.ini
+      - name: Setup test directory
         run: |
-          export $(echo '${{ inputs.test_input }}' | jq -r '. | to_entries[] | join("=")')
-          echo "Output environment"
-          env | grep NCBAC
-          cat > testConfig.ini <<EOF
-          connstr = $NCBACCSTR
-          username = $NCBACUSER
-          password = $NCBACPASS
-          nonprod = $NCBACNONPROD
-          fqdn = $NCBACFQDN
-          EOF
-          echo "Output testConfig.ini"
-          cat testConfig.ini
           mkdir NCBAC-test
-          mv testConfig.ini NCBAC-test
           cd NCBAC-test
-          curl -o analyticsQuickTest.js ${CI_SCRIPTS_URL}/releaseSmokeTests/analytics  QuickTest.js
+          curl -o analyticsQuickTest.cjs ${CI_SCRIPTS_URL}/releaseSmokeTests/analyticsQuickTest.cjs
+          curl -o analyticsQuickTest.mjs ${CI_SCRIPTS_URL}/releaseSmokeTests/analyticsQuickTest.mjs
           ls -alh
         env:
           CI_SCRIPTS_URL: "https://raw.githubusercontent.com/couchbaselabs/sdkbuild-jenkinsfiles/master/couchnode"
@@ -111,131 +64,50 @@ jobs:
           path: |
             NCBAC-test/
 
-  verify-linux:
+  verify-cbdinocluster:
     runs-on: ubuntu-22.04
     needs: test-setup
     strategy:
       fail-fast: false
       matrix:
         os: ['ubuntu-22.04']
-        node-version: ["18", "20"]
-        arch: ['x86_64', 'arm64']
+        node-version: ["20", "22", "24"]
     steps:
-      - name: Set up QEMU
-        if: ${{ matrix.arch == 'arm64' }}
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-      - uses: actions/download-artifact@v4
-        with:
-          name: NCBAC-test-setup
-          path: NCBAC
-      - name: Run in docker (install via tag)
-        if: ${{ inputs.npm_tag != '' }}
-        uses: addnab/docker-run-action@v3
-        with:
-          image: node:${{ matrix.node-version }}-bullseye-slim
-          options: >-
-            --platform linux/${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64'}}
-            -v ${{ github.workspace }}/NCBAC:/NCBAC
-            -e NPM_TAG=${{ inputs.npm_tag }}
-          run: |
-            env
-            node --version
-            cd /NCBAC
-            ls -alh
-            npm init -y
-            npm install ini
-            npm install couchbase-analytics@$NPM_TAG -ddd
-            npm list --depth=2
-            node analyticsQuickTest.js
-      - name: Run in docker (install via version)
-        if: ${{ inputs.npm_tag == '' }}
-        uses: addnab/docker-run-action@v3
-        with:
-          image: node:${{ matrix.node-version }}-bullseye-slim
-          options: >-
-            --platform linux/${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64'}}
-            -v ${{ github.workspace }}/NCBAC:/NCBAC
-            -e SDK_VERSION=${{ inputs.version }}
-          run: |
-            env
-            node --version
-            cd /NCBAC
-            ls -alh
-            npm init -y
-            npm install ini
-            npm install couchbase-analytics@$SDK_VERSION -ddd
-            npm list --depth=2
-            node analyticsQuickTest.js
-
-  verify-alpine-linux:
-    needs: test-setup
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ['ubuntu-22.04']
-        node-version: ["16", "18", "20"]
-        arch: ['x86_64', 'arm64']
-    steps:
-      - name: Set up QEMU
-        if: ${{ matrix.arch == 'arm64' }}
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-      - uses: actions/download-artifact@v4
-        with:
-          name: NCBAC-test-setup
-          path: NCBAC
-      - name: Run in docker (install via tag)
-        if: ${{ inputs.npm_tag != '' }}
-        uses: addnab/docker-run-action@v3
-        with:
-          image: node:${{ matrix.node-version }}-alpine
-          options: >-
-            --platform linux/${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64'}}
-            -v ${{ github.workspace }}/NCBAC:/NCBAC
-            -e NPM_TAG=${{ inputs.npm_tag }}
-          run: |
-            env
-            node --version
-            cd /NCBAC
-            ls -alh
-            npm init -y
-            npm install ini
-            npm install couchbase-analytics@$NPM_TAG -ddd
-            npm list --depth=2
-            node analyticsQuickTest.js
-      - name: Run in docker (install via version)
-        if: ${{ inputs.npm_tag == '' }}
-        uses: addnab/docker-run-action@v3
-        with:
-          image: node:${{ matrix.node-version }}-alpine
-          options: >-
-            --platform linux/${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64'}}
-            -v ${{ github.workspace }}/NCBAC:/NCBAC
-            -e SDK_VERSION=${{ inputs.version }}
-          run: |
-            env
-            node --version
-            cd /NCBAC
-            ls -alh
-            npm init -y
-            npm install ini
-            npm install couchbase-analytics@$SDK_VERSION -ddd
-            npm list --depth=2
-            node analyticsQuickTest.js
-
-  verify-macos:
-    needs: test-setup
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ["macos-13", "macos-14"]
-        node-version: ["16", "18", "20"]
-    steps:
+      - name: Install cbdinocluster
+        run: |
+          mkdir -p "$HOME/bin"
+          wget -nv -O $HOME/bin/cbdinocluster https://github.com/couchbaselabs/cbdinocluster/releases/download/v0.0.66/cbdinocluster-linux-amd64
+          chmod +x $HOME/bin/cbdinocluster
+          echo "$HOME/bin" >> $GITHUB_PATH
+      - name: Install s3mock
+        run: |
+          docker pull adobe/s3mock
+          docker pull nginx
+      - name: Initialize cbdinocluster
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cbdinocluster -v init --auto
+      - name: Start couchbase cluster
+        env:
+          CLUSTERCONFIG: |
+            columnar: true
+            nodes:
+              - count: 3
+                version: 1.2.0
+                docker:
+                  image: ghcr.io/cb-vanilla/columnar:1.2.0-1055
+            docker:
+              load-balancer: true
+              use-dino-certs: true
+        run: |
+          CBDC_ID=$(cbdinocluster -v alloc --def="${CLUSTERCONFIG}")
+          CBDC_CONNSTR=$(cbdinocluster -v connstr --tls --analytics $CBDC_ID)
+          echo "CBDC_ID=$CBDC_ID" >> "$GITHUB_ENV"
+          echo "CBDC_CONNSTR=$CBDC_CONNSTR" >> "$GITHUB_ENV"
+          echo "NCBACCSTR=$CBDC_CONNSTR" >> "$GITHUB_ENV"
+          echo "NCBACUSER=Administrator" >> "$GITHUB_ENV"
+          echo "NCBACPASS=password" >> "$GITHUB_ENV"
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -248,6 +120,18 @@ jobs:
         with:
           name: NCBAC-test-setup
           path: NCBAC
+      - name: Write testConfig.ini
+        run: |
+          cat > NCBAC/testConfig.ini <<EOF
+          connstr = $NCBACCSTR
+          username = $NCBACUSER
+          password = $NCBACPASS
+          fqdn = travel-sample.inventory.fqdn
+          nonprod = false
+          disable_cert_verification = true
+          EOF
+          echo "Written testConfig.ini:"
+          cat NCBAC/testConfig.ini
       - name: Run verification (install via tag)
         if: ${{ inputs.npm_tag != '' }}
         run: |
@@ -259,7 +143,8 @@ jobs:
           npm install ini
           npm install couchbase-analytics@$NPM_TAG -ddd
           npm list --depth=2
-          node analyticsQuickTest.js
+          node analyticsQuickTest.cjs
+          node analyticsQuickTest.mjs
         env:
           NPM_TAG: ${{ inputs.npm_tag }}
       - name: Run verification (install via version)
@@ -273,55 +158,7 @@ jobs:
           npm install ini
           npm install couchbase-analytics@$SDK_VERSION -ddd
           npm list --depth=2
-          node analyticsQuickTest.js
-        env:
-          SDK_VERSION: ${{ inputs.version }}
-
-  verify-windows:
-    needs: test-setup
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ["windows-latest"]
-        node-version: ["16", "18", "20"]
-        arch: ["x86_64"]
-    steps:
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-      - name: Confirm Node version
-        run: |
-          node --version
-          node -p "process.arch"
-      - uses: actions/download-artifact@v4
-        with:
-          name: NCBAC-test-setup
-          path: NCBAC
-      - name: Run verification (install via tag)
-        if: ${{ inputs.npm_tag != '' }}
-        run: |
-          env
-          node --version
-          cd NCBAC
-          npm init -y
-          npm install ini
-          npm install couchbase-analytics@$env:NPM_TAG -ddd
-          npm list --depth=2
-          node analyticsQuickTest.js
-        env:
-          NPM_TAG: ${{ inputs.npm_tag }}
-      - name: Run verification (install via version)
-        if: ${{ inputs.npm_tag == '' }}
-        run: |
-          env
-          node --version
-          cd NCBAC
-          npm init -y
-          npm install ini
-          npm install couchbase-analytics@$env:SDK_VERSION -ddd
-          npm list --depth=2
-          node analyticsQuickTest.js
+          node analyticsQuickTest.cjs
+          node analyticsQuickTest.mjs
         env:
           SDK_VERSION: ${{ inputs.version }}

@@ -3,11 +3,9 @@ on:
   push:
     branches:
       - main
-      - dev
   pull_request:
     branches:
       - main
-      - dev
   workflow_dispatch:
     inputs:
       is_release:
@@ -20,11 +18,6 @@ on:
         required: false
         default: ""
         type: string
-      test_input:
-        description: "JSON formatted object representing test input."
-        required: false
-        default: ""
-        type: string
   workflow_call:
     inputs:
       is_release:
@@ -34,11 +27,6 @@ on:
           type: boolean
       sha:
         description: "The git SHA to use for release.  Only set if needing to publish"
-        required: false
-        default: ""
-        type: string
-      test_input:
-        description: "JSON formatted object representing test input."
         required: false
         default: ""
         type: string
@@ -56,26 +44,6 @@ jobs:
         if: inputs.is_release && inputs.sha != ''
         run: |
           echo '"${{ inputs.sha }}"' | jq -e '. | length == 40'
-      - name: Validate host
-        if: ${{ inputs.test_input != '' && fromJSON(inputs.test_input).NCBACCSTR == ''}}
-        run: |
-          echo "::error must provide NCBACCSTR."
-          exit 1
-      - name: Validate user
-        if: ${{ inputs.test_input != '' && fromJSON(inputs.test_input).NCBACUSER == '' }}
-        run: |
-          echo "::error must provide NCBACUSER."
-          exit 1
-      - name: Validate password
-        if: ${{ inputs.test_input != '' && fromJSON(inputs.test_input).NCBCAPASSWORD == '' }}
-        run: |
-          echo "::error must provide NCBCAPASSWORD."
-          exit 1
-      - name: Validate FQDN
-        if: ${{ inputs.test_input != '' && fromJSON(inputs.test_input).NCBACFQDN == '' }}
-        run: |
-          echo "::error must provide NCBACFQDN."
-          exit 1
           
   lint:
     runs-on: ubuntu-22.04
@@ -148,25 +116,6 @@ jobs:
           cp package-lock.json ncbac-test
           cp tsconfig.json ncbac-test
       - name: Build testConfig.ini
-        if: ${{ inputs.test_input != '' }}
-        run: |
-          export $(echo '${{ inputs.test_input }}' | jq -r '. | to_entries[] | join("=")')
-          echo "Output environment"
-          env | grep NCBAC
-          cat > testConfig.ini <<EOF
-          connstr = $NCBACCSTR
-          username = $NCBACUSER
-          password = $NCBACPASS
-          nonprod = $NCBACNONPROD
-          fqdn = $NCBACFQDN
-          EOF
-          echo "Output testConfig.ini"
-          cat testConfig.ini
-          mv testConfig.ini ncbac-test/test
-          echo "ncbac-test/test contents"
-          ls -alh ncbac-test/test
-      - name: Build default testConfig.ini
-        if: ${{ inputs.test_input == '' }}
         run: |
           cat > testConfig.ini <<EOF
           username = Administrator
@@ -231,7 +180,6 @@ jobs:
             npm install
             npm install couchbase-analytics*.tgz
             npm run test
-
 
   test-macos:
     runs-on: ${{ matrix.os }}
@@ -298,11 +246,8 @@ jobs:
           npm install
           npm install couchbase-analytics*.tgz
           npm run test
-            
 
-  # Run integration tests on cbdino for PR validation
   test-integration-cbdinocluster:
-    if: ${{ inputs.test_input == '' }}
     needs: [ validate-input, lint, test-setup ]
     strategy:
       fail-fast: false
