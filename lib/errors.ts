@@ -53,7 +53,7 @@ export class TimeoutError extends AnalyticsError {
 }
 
 /**
- * Indicates that the Columnar cluster returned an error message in response to a query request.
+ * Indicates that the Analytics cluster returned an error message in response to a query request.
  *
  * @category Error Handling
  */
@@ -65,7 +65,7 @@ export class QueryError extends AnalyticsError {
 
   // TODO: Add docs reference link with error codes
   /**
-   * The Columnar error code sent by the server.
+   * The Analytics error code sent by the server.
    */
   code: number
 

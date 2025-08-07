@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016-2024. Couchbase, Inc.
+ *  Copyright 2016-2025. Couchbase, Inc.
  *  All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -55,9 +55,9 @@ export class Scope {
   }
 
   /**
-   * Executes a query against the Columnar scope.
+   * Executes a query against the Analytics scope.
    *
-   * @param statement The columnar SQL++ statement to execute.
+   * @param statement The Analytics SQL++ statement to execute.
    * @param options Optional parameters for this operation.
    */
   executeQuery(

@@ -277,9 +277,9 @@ export class Cluster {
   }
 
   /**
-   * Executes a query against the Columnar cluster.
+   * Executes a query against the Analytics cluster.
    *
-   * @param statement The columnar SQL++ statement to execute.
+   * @param statement The Analytics SQL++ statement to execute.
    * @param options Optional parameters for this operation.
    */
   executeQuery(

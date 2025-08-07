@@ -23,7 +23,7 @@ import { TimeoutError } from './errors.js'
 import { ParsingUtilities } from './utilities.js'
 
 /**
- * Contains the results of a columnar query.
+ * Contains the results of an Analytics query.
  *
  * @category Query
  */
@@ -40,7 +40,7 @@ export class QueryResult {
   }
 
   /**
-   * Returns a [Readable](https://nodejs.org/api/stream.html#readable-streams) stream of rows returned from the Columnar query.
+   * Returns a [Readable](https://nodejs.org/api/stream.html#readable-streams) stream of rows returned from the Analytics query.
    */
   rows(): Readable {
     return this._stream
@@ -279,7 +279,7 @@ export class QueryMetrics {
 
 /**
  * Represents the various scan consistency options that are available when
- * querying against columnar.
+ * querying against Analytics.
  *
  * @category Query
  */
