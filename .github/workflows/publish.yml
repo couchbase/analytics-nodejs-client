@@ -38,6 +38,11 @@ on:
         required: false
         default: "{\"PUBLISH_NPM\": true, \"PUBLISH_API_DOCS\": true, \"SKIP_TESTS\": false}"
         type: string
+      skip_validation:
+        description: "Set to true in order to skip validating the published packages."
+        required: true
+        default: false
+        type: boolean
 
 env:
   NODE_VERSION: "20"
@@ -150,7 +155,6 @@ jobs:
           node --version
           node -p "process.arch"
       - name: Set version
-        if: ${{ inputs.is_release }}
         env:
           NCBAC_VERSION: ${{ inputs.version }}
         run: |
@@ -180,6 +184,7 @@ jobs:
       always()
       && needs.publish-npm.result == 'success'
       && needs.publish-npm.result != 'skipped'
+      && inputs.skip_validation == false
     uses: ./.github/workflows/verify_release.yml
     with:
       version: ${{ inputs.version }}
