@@ -3,16 +3,18 @@ Node.js client for [Couchbase](https://couchbase.com) Analytics
 
 # Installing the SDK<a id="installing-the-sdk"></a>
 
-Until a version is available on npm, the SDK can be installed with the following command.
-
-Install the SDK via `npm`:
+To install the latest release using npm, run:
 ```console
-npm install https://github.com/couchbaselabs/analytics-nodejs-client
+npm install couchbase-analytics
+```
+To install the development version directly from github, run:
+```console
+npm install https://github.com/couchbase/analytics-nodejs-client
 ```
 
 # Using the SDK<a id="using-the-sdk"></a>
 
-Some more examples are provided in the [examples directory](https://github.com/couchbaselabs/analytics-nodejs-client/tree/dev/examples).
+Some more examples are provided in the [examples directory](https://github.com/couchbase/analytics-nodejs-client/tree/main/examples).
 
 ## CommonJS
 **Connecting and executing a query**
