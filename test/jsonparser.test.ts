@@ -25,9 +25,9 @@ import { QueryMetadata } from '../lib/querytypes.js'
 
 describe('JsonTokenParserStream', function () {
   async function collectRowsAndErrors(jsonString: string): Promise<{
-    rows: string[];
-    errorsItems: string[] | null;
-    stack: any;
+    rows: string[]
+    errorsItems: string[] | null
+    stack: any
   }> {
     return new Promise((resolve, reject) => {
       const rows: string[] = []

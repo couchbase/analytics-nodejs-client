@@ -82,12 +82,16 @@ export async function runWithRetry<T>(
 ): Promise<T> {
   let lastErr: Error | null = null
 
-  for (let retryIdx = 0; retryIdx <= requestContext.maxRetryAttempts; retryIdx++) {
+  for (
+    let retryIdx = 0;
+    retryIdx <= requestContext.maxRetryAttempts;
+    retryIdx++
+  ) {
     const remainingTime = deadline - Date.now()
     if (remainingTime <= 0) {
       requestContext.addPreviousAttemptErrorToContext(lastErr)
       throw new TimeoutError(
-          requestContext.attachErrorContext('Query timeout exceeded')
+        requestContext.attachErrorContext('Query timeout exceeded')
       )
     }
 
@@ -113,9 +117,9 @@ export async function runWithRetry<T>(
     if (Date.now() + delay > deadline) {
       requestContext.addPreviousAttemptErrorToContext(lastErr)
       throw new TimeoutError(
-          requestContext.attachErrorContext(
-              'Query timeout will exceed during retry backoff'
-          )
+        requestContext.attachErrorContext(
+          'Query timeout will exceed during retry backoff'
+        )
       )
     }
     await sleep(delay)

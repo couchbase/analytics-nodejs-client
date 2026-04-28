@@ -17,10 +17,18 @@
 
 import { Deserializer } from './deserializers.js'
 import { QueryExecutor } from './queryexecutor.js'
+import {
+  AsyncQueryExecutor,
+  FetchStatusResponse,
+  StartQueryResponse,
+} from './asyncqueryexecutor.js'
 import { Readable, Transform } from 'node:stream'
 import { TransformCallback } from 'stream'
-import { TimeoutError } from './errors.js'
+import { TimeoutError, AnalyticsError } from './errors.js'
 import { ParsingUtilities } from './utilities.js'
+import type { Cluster } from './cluster.js'
+import type { Scope } from './scope.js'
+import type { QueryNotFoundException, QueryError } from './errors.js'
 
 /**
  * Contains the results of an Analytics query.
@@ -78,10 +86,18 @@ export class QueryResultStream extends Transform {
   private executor: QueryExecutor
   private deadline: number
   private _timeout: NodeJS.Timeout | undefined
-  constructor(executor: QueryExecutor, deadline: number, signal: AbortSignal) {
+  private _deserializer: Deserializer
+
+  constructor(
+    executor: QueryExecutor,
+    deadline: number,
+    signal: AbortSignal,
+    deserializer: Deserializer
+  ) {
     super({ objectMode: true, signal: signal })
     this.executor = executor
     this.deadline = deadline
+    this._deserializer = deserializer
 
     const rem = this.deadline - Date.now()
     if (rem <= 0) {
@@ -118,7 +134,7 @@ export class QueryResultStream extends Transform {
     _: BufferEncoding,
     callback: TransformCallback
   ): void {
-    this.push(this.executor.deserializer.deserialize(jsonString))
+    this.push(this._deserializer.deserialize(jsonString))
     callback()
   }
 
@@ -359,4 +375,241 @@ export interface QueryOptions {
    * Sets an abort signal for the query allowing the operation to be cancelled.
    */
   abortSignal?: AbortSignal
+}
+
+/**
+ * Options for the {@link Cluster.startQuery} and {@link Scope.startQuery} operations.
+ *
+ * @category Query
+ */
+export interface StartQueryOptions {
+  /**
+   * Positional values to be used for the placeholders within the query.
+   */
+  positionalParameters?: any[]
+
+  /**
+   * Named values to be used for the placeholders within the query.
+   */
+  namedParameters?: { [key: string]: any }
+
+  /**
+   * Specifies the consistency requirements when executing the query.
+   *
+   * @see AnalyticsScanConsistency
+   */
+  scanConsistency?: QueryScanConsistency
+
+  /**
+   * Indicates whether this query should be executed in read-only mode.
+   */
+  readOnly?: boolean
+
+  /**
+   * Specifies any additional parameters which should be passed to the query engine
+   * when executing the query.
+   */
+  raw?: { [key: string]: any }
+
+  /**
+   * The timeout for this operation, represented in milliseconds.
+   */
+  timeout?: number
+
+  /**
+   * The returned client context id for this query.
+   */
+  clientContextId?: string
+
+  /**
+   * Specifies the maximum number of retries for this query. If unset, defaults to the cluster-level maxRetries.
+   *
+   * Volatile: This API is subject to change at any time.
+   */
+  maxRetries?: number
+
+  /**
+   * Sets an abort signal for the query allowing the operation to be canceled.
+   */
+  abortSignal?: AbortSignal
+}
+
+/**
+ * Options for {@link QueryHandle.cancel}.
+ *
+ * @category Query
+ */
+export interface CancelOptions {}
+
+/**
+ * Options for {@link QueryHandle.fetchStatus}.
+ *
+ * @category Query
+ */
+export interface FetchStatusOptions {}
+
+/**
+ * Options for {@link QueryResultHandle.fetchResults}.
+ */
+export interface FetchResultsOptions {
+  /**
+   * Sets the deserializer used by {@link QueryResult.rows } to convert query result rows into objects.
+   * If not specified, defaults to the cluster's default deserializer.
+   */
+  deserializer?: Deserializer
+}
+
+/**
+ * Options for {@link QueryResultHandle.discardResults}.
+ *
+ * @category Query
+ */
+export interface DiscardResultsOptions {}
+
+/**
+ * Represents a handle to a server-side async query.
+ * Provides methods to check status, and cancel the query.
+ *
+ * @category Query
+ */
+export class QueryHandle {
+  private _handle: string
+  private _requestId: string
+  private _executor: AsyncQueryExecutor
+
+  /**
+   * @internal
+   */
+  constructor(executor: AsyncQueryExecutor, response: StartQueryResponse) {
+    this._executor = executor
+    this._requestId = response.requestID
+    this._handle = response.handle
+  }
+
+  /**
+   * Fetches the current status of the async query from the server.
+   * Returns a {@link QueryStatus} describing the query's current state.
+   *
+   * @param _options The options to use for the fetchStatus operation.
+   *
+   * @throws {QueryNotFoundException} If the query is not found (404).
+   * @throws {QueryError} If the server reports an error for the query.
+   */
+  async fetchStatus(_options?: FetchStatusOptions): Promise<QueryStatus> {
+    const response = await this._executor.fetchStatus(this._handle)
+    return new QueryStatus(this._executor, this._requestId, response)
+  }
+
+  /**
+   * Cancels the async query on the server.
+   * Does not throw if the query has already been canceled or discarded (404).
+   *
+   * @param _options The options to use for the cancel operation.
+   */
+  async cancel(_options?: CancelOptions): Promise<void> {
+    return this._executor.cancelQuery(this._requestId)
+  }
+}
+
+/**
+ * Represents the status of a server-side async query.
+ *
+ * @category Query
+ */
+export class QueryStatus {
+  private readonly _executor: AsyncQueryExecutor
+  private readonly _requestId: string
+  private readonly _raw: FetchStatusResponse
+
+  /**
+   * @internal
+   */
+  constructor(
+    executor: AsyncQueryExecutor,
+    requestId: string,
+    raw: FetchStatusResponse
+  ) {
+    this._executor = executor
+    this._requestId = requestId
+    this._raw = raw
+  }
+
+  /**
+   * Returns `true` if the query results are ready to be fetched.
+   */
+  resultsReady(): boolean {
+    return typeof this._raw.handle === 'string' && this._raw.handle.length > 0
+  }
+
+  /**
+   * Returns a {@link QueryResultHandle} for fetching the results of the completed query.
+   *
+   * @throws {AnalyticsError} If results are not yet ready (i.e. {@link QueryStatus.resultsReady} Returns `false`).
+   */
+  resultsHandle(): QueryResultHandle {
+    if (!this._raw.handle) {
+      throw new AnalyticsError('Results are not ready')
+    }
+    return new QueryResultHandle(
+      this._executor,
+      this._requestId,
+      this._raw.handle
+    )
+  }
+
+  /**
+   * Returns a JSON string representation of the raw status response from the server.
+   */
+  toString(): string {
+    return JSON.stringify(this._raw)
+  }
+}
+
+/**
+ * Represents a handle to fetch or discard the results of a completed async query.
+ *
+ * @category Query
+ */
+export class QueryResultHandle {
+  private readonly _requestId: string
+  private readonly _handle: string
+  private _executor: AsyncQueryExecutor
+
+  /**
+   * @internal
+   */
+  constructor(executor: AsyncQueryExecutor, requestId: string, handle: string) {
+    this._executor = executor
+    this._requestId = requestId
+    this._handle = handle
+  }
+
+  /**
+   * The request ID associated with this query result.
+   */
+  get requestId(): string {
+    return this._requestId
+  }
+
+  /**
+   * Fetches the query results from the server.
+   * Returns a {@link QueryResult} which provides a stream of rows.
+   *
+   * @param options The options to use for the fetchResults operation.
+   *
+   * @throws {QueryNotFoundException} If the results are not found (404).
+   */
+  async fetchResults(options?: FetchResultsOptions): Promise<QueryResult> {
+    return this._executor.fetchResults(this._handle, options?.deserializer)
+  }
+
+  /**
+   * Discards the query results on the server, freeing server-side resources.
+   * Does not throw if the results have already been discarded or canceled (404).
+   *
+   * @param _options The options to use for the discardResults operation.
+   */
+  async discardResults(_options?: DiscardResultsOptions): Promise<void> {
+    return this._executor.discardResults(this._handle)
+  }
 }

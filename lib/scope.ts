@@ -17,8 +17,15 @@
 
 import { Database } from './database.js'
 import { Cluster } from './cluster.js'
-import { QueryOptions, QueryResult } from './querytypes.js'
+import {
+  QueryOptions,
+  QueryResult,
+  QueryHandle,
+  StartQueryOptions,
+} from './querytypes.js'
 import { QueryExecutor } from './queryexecutor.js'
+import { AsyncQueryExecutor } from './asyncqueryexecutor.js'
+import { InvalidArgumentError } from './errors.js'
 
 /**
  * Volatile: This API is subject to change at any time.
@@ -81,6 +88,38 @@ export class Scope {
       this._name
     )
     return exec.query(statement, options)
+  }
+
+  /**
+   * Starts an asynchronous query against the Analytics cluster.
+   * Returns a {@link QueryHandle} that can be used to fetch results, and
+   * cancel the query.
+   *
+   * @param statement The Analytics SQL++ statement to execute.
+   * @param options Optional parameters for this operation.
+   */
+  async startQuery(
+    statement: string,
+    options?: StartQueryOptions
+  ): Promise<QueryHandle> {
+    if (!options) {
+      options = {}
+    }
+
+    if (options.timeout && options.timeout < 0) {
+      throw new InvalidArgumentError('timeout must be non-negative.')
+    }
+
+    const exec = new AsyncQueryExecutor(
+      this.cluster,
+      this.cluster.deserializer,
+      options.maxRetries || this.cluster.maxRetries,
+      options.abortSignal,
+      this._database.name,
+      this._name
+    )
+    const response = await exec.startQuery(statement, options)
+    return new QueryHandle(exec, response)
   }
 
   /**

@@ -20,6 +20,7 @@ import {
   AnalyticsError,
   InvalidCredentialError,
   QueryError,
+  QueryNotFoundException,
   TimeoutError,
 } from './errors.js'
 import {
@@ -46,12 +47,20 @@ export class ErrorHandler {
             context.attachErrorContext('Invalid credentials')
           )
         )
+      } else if (errs.statusCode === 404) {
+        return RequestBehaviour.fail(
+          new QueryNotFoundException(
+            context.attachErrorContext('Query not found')
+          )
+        )
       } else if (errs.statusCode === 503) {
-        return RequestBehaviour.retry(new AnalyticsError(
+        return RequestBehaviour.retry(
+          new AnalyticsError(
             context.attachErrorContext(
-                'The server returned a 503 Service Unavailable error. This is likely a temporary issue.'
+              'The server returned a 503 Service Unavailable error. This is likely a temporary issue.'
             )
-        ))
+          )
+        )
       }
 
       return RequestBehaviour.fail(
@@ -64,18 +73,22 @@ export class ErrorHandler {
     } else if (errs instanceof TimeoutError) {
       return RequestBehaviour.fail(errs)
     } else if (errs instanceof InternalConnectionTimeout) {
-      return RequestBehaviour.retry(new TimeoutError(
+      return RequestBehaviour.retry(
+        new TimeoutError(
           context.attachErrorContext(
-              "Timed out attempting to establish a connection to a Node within the connectTimeout period."
+            'Timed out attempting to establish a connection to a Node within the connectTimeout period.'
           )
-      ))
+        )
+      )
     } else if (errs instanceof ConnectionError) {
       if (this._isRetriableConnectionError(errs)) {
-        return RequestBehaviour.retry(new AnalyticsError(
+        return RequestBehaviour.retry(
+          new AnalyticsError(
             context.attachErrorContext(
-                `Got a retriable connection error from the HTTP library, details: ${errs.cause}`
+              `Got a retriable connection error from the HTTP library, details: ${errs.cause}`
             )
-        ))
+          )
+        )
       }
 
       return RequestBehaviour.fail(
@@ -118,7 +131,9 @@ export class ErrorHandler {
     let firstRetriableError: any = null
 
     // Each error will be a string if they come from the json streamer, or an object if they've already been parsed on a non-successful status code
-    const parsedErrors = errors.map((err) => typeof err === 'string' ? JSON.parse(err) : err)
+    const parsedErrors = errors.map((err) =>
+      typeof err === 'string' ? JSON.parse(err) : err
+    )
 
     for (const jsonErr of parsedErrors) {
       const retriable = 'retriable' in jsonErr ? jsonErr.retriable : false
@@ -162,13 +177,15 @@ export class ErrorHandler {
       )
     } else if (firstRetriableError && !firstNonRetriableError) {
       addRemainingErrorsToContext()
-      return RequestBehaviour.retry(new QueryError(
+      return RequestBehaviour.retry(
+        new QueryError(
           context.attachErrorContext(
-              `Retriable server-side query error occurred: Server message: ${selectedError.msg}. Server error code: ${selectedError.code}`
+            `Retriable server-side query error occurred: Server message: ${selectedError.msg}. Server error code: ${selectedError.code}`
           ),
           selectedError.msg,
           selectedError.code
-      ))
+        )
+      )
     } else {
       addRemainingErrorsToContext()
       return RequestBehaviour.fail(

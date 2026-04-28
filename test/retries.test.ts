@@ -18,7 +18,7 @@
 import { assert } from 'chai'
 import { runWithRetry, RequestBehaviour } from '../lib/retries.js'
 import { harness } from './harness.js'
-import {AnalyticsError, TimeoutError} from '../lib/errors.js'
+import { TimeoutError } from '../lib/errors.js'
 import { RequestContext } from '../lib/requestcontext.js'
 
 describe('#Retries', function () {
@@ -59,12 +59,7 @@ describe('#Retries', function () {
     const evaluate = (err: any) => RequestBehaviour.retry(err)
 
     await harness.throwsHelper(async () => {
-      await runWithRetry(
-        fn,
-        evaluate,
-        Date.now() + 500,
-        new RequestContext(7)
-      )
+      await runWithRetry(fn, evaluate, Date.now() + 500, new RequestContext(7))
     }, TimeoutError)
   })
 
@@ -78,12 +73,7 @@ describe('#Retries', function () {
     const evaluate = (err: Error) => RequestBehaviour.fail(err)
 
     await harness.throwsHelper(async () => {
-      await runWithRetry(
-        fn,
-        evaluate,
-        Date.now() + 500,
-        new RequestContext(7)
-      )
+      await runWithRetry(fn, evaluate, Date.now() + 500, new RequestContext(7))
     }, Error)
 
     assert.equal(callCount, 1)
@@ -105,12 +95,7 @@ describe('#Retries', function () {
     }
 
     try {
-        await runWithRetry(
-            fn,
-            evaluate,
-            Date.now() + 5000,
-            context
-        )
+      await runWithRetry(fn, evaluate, Date.now() + 5000, context)
       assert(false)
     } catch (e) {
       assert.instanceOf(e, Error)

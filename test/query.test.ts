@@ -331,6 +331,6 @@ describe('#Columnar query - cluster', function () {
   genericTests(() => harness.c)
 })
 
-describe('#Columnar query - scope', function ()  {
-    genericTests(() => harness.s)
+describe('#Columnar query - scope', function () {
+  genericTests(() => harness.s)
 })

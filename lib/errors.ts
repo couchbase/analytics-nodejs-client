@@ -84,6 +84,17 @@ export class QueryError extends AnalyticsError {
 }
 
 /**
+ * Indicates that a query was not found, typically because it has been discarded, canceled, or never existed.
+ *
+ * @category Error Handling
+ */
+export class QueryNotFoundException extends AnalyticsError {
+  constructor(message: string) {
+    super(message)
+  }
+}
+
+/**
  * Indicates that one of the passed arguments was invalid.
  *
  * @category Error Handling

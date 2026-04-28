@@ -447,7 +447,6 @@ before(function (done) {
   harness.prepare().then(done).catch(done)
 })
 
-
 after(function (done) {
   this.timeout(10000)
   harness.cleanup().then(done).catch(done)

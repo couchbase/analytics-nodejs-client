@@ -18,8 +18,14 @@
 import { Credential } from './credential.js'
 import { Database } from './database.js'
 import { Deserializer, JsonDeserializer } from './deserializers.js'
-import { QueryOptions, QueryResult } from './querytypes.js'
+import {
+  QueryOptions,
+  QueryResult,
+  QueryHandle,
+  StartQueryOptions,
+} from './querytypes.js'
 import { QueryExecutor } from './queryexecutor.js'
+import { AsyncQueryExecutor } from './asyncqueryexecutor.js'
 import { HttpClient } from './httpclient.js'
 import { InvalidArgumentError } from './errors.js'
 import { ConnSpec } from './connspec.js'
@@ -303,6 +309,35 @@ export class Cluster {
     return exec.query(statement, options)
   }
 
+  /**
+   * Starts an asynchronous query against the Analytics cluster.
+   * Returns a {@link QueryHandle} that can be used to fetch results, and
+   * cancel the query.
+   *
+   * @param statement The Analytics SQL++ statement to execute.
+   * @param options Optional parameters for this operation.
+   */
+  async startQuery(
+    statement: string,
+    options?: StartQueryOptions
+  ): Promise<QueryHandle> {
+    if (!options) {
+      options = {}
+    }
+
+    if (options.timeout && options.timeout < 0) {
+      throw new InvalidArgumentError('timeout must be non-negative')
+    }
+
+    const exec = new AsyncQueryExecutor(
+      this,
+      this._deserializer,
+      options.maxRetries || this._maxRetries,
+      options.abortSignal
+    )
+    const response = await exec.startQuery(statement, options)
+    return new QueryHandle(exec, response)
+  }
   /**
    * Shuts down this cluster object.  Cleaning up all resources associated with it.
    *

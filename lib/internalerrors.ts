@@ -103,7 +103,7 @@ export class ErrorContext {
       parts.push(`previousAttemptErrors=${this.previousAttemptErrors}`)
     if (this.numAttempts) parts.push(`numAttempts=${this.numAttempts}`)
     if (this.otherServerErrors.length > 0)
-      parts.push(`otherServerErrors=${this.otherServerErrors}`)
+      parts.push(`otherServerErrors=${JSON.stringify(this.otherServerErrors)}`)
     return `ErrorContext: ${parts.join(', ')}`
   }
 }
