@@ -97,7 +97,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
    * @internal
    */
   async fetchStatus(statusHandle: string): Promise<FetchStatusResponse> {
-    const deadline = Date.now() + 2500
+    const deadline = Date.now() + this._cluster.queryTimeout
 
     this._requestContext.setGenericRequestContextFields('', statusHandle, 'GET')
 
@@ -120,7 +120,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
    * @internal
    */
   async cancelQuery(requestId: string): Promise<void> {
-    const deadline = Date.now() + 2500
+    const deadline = Date.now() + this._cluster.queryTimeout
 
     const path = '/api/v1/active_requests'
     this._requestContext.setGenericRequestContextFields('', path, 'DELETE')
@@ -152,7 +152,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
     resultHandle: string,
     deserializer?: Deserializer
   ): Promise<QueryResult> {
-    const deadline = Date.now() + 2500
+    const deadline = Date.now() + this._cluster.queryTimeout
 
     this._requestContext.setGenericRequestContextFields('', resultHandle, 'GET')
 
@@ -175,7 +175,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
    * @internal
    */
   async discardResults(resultHandle: string): Promise<void> {
-    const deadline = Date.now() + 2500
+    const deadline = Date.now() + this._cluster.queryTimeout
 
     this._requestContext.setGenericRequestContextFields(
       '',
