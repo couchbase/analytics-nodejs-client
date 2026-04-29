@@ -53,6 +53,8 @@ export interface FetchStatusResponse {
  * @internal
  */
 export class AsyncQueryExecutor extends QueryExecutor {
+  private _operationTimeout: number = 0
+
   /**
    * Starts an async query. Sends `mode: "async"` in the request body
    * and returns the raw server response containing the requestID and handle.
@@ -63,8 +65,8 @@ export class AsyncQueryExecutor extends QueryExecutor {
     statement: string,
     options: StartQueryOptions
   ): Promise<StartQueryResponse> {
-    const deadline =
-      Date.now() + (options.timeout || this._cluster.queryTimeout)
+    this._operationTimeout = options.timeout || this._cluster.queryTimeout
+    const deadline = Date.now() + this._operationTimeout
 
     this._requestContext.setGenericRequestContextFields(
       statement,
@@ -97,7 +99,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
    * @internal
    */
   async fetchStatus(statusHandle: string): Promise<FetchStatusResponse> {
-    const deadline = Date.now() + this._cluster.queryTimeout
+    const deadline = Date.now() + this._operationTimeout
 
     this._requestContext.setGenericRequestContextFields('', statusHandle, 'GET')
 
@@ -120,7 +122,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
    * @internal
    */
   async cancelQuery(requestId: string): Promise<void> {
-    const deadline = Date.now() + this._cluster.queryTimeout
+    const deadline = Date.now() + this._operationTimeout
 
     const path = '/api/v1/active_requests'
     this._requestContext.setGenericRequestContextFields('', path, 'DELETE')
@@ -152,7 +154,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
     resultHandle: string,
     deserializer?: Deserializer
   ): Promise<QueryResult> {
-    const deadline = Date.now() + this._cluster.queryTimeout
+    const deadline = Date.now() + this._operationTimeout
 
     this._requestContext.setGenericRequestContextFields('', resultHandle, 'GET')
 
@@ -175,7 +177,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
    * @internal
    */
   async discardResults(resultHandle: string): Promise<void> {
-    const deadline = Date.now() + this._cluster.queryTimeout
+    const deadline = Date.now() + this._operationTimeout
 
     this._requestContext.setGenericRequestContextFields(
       '',
