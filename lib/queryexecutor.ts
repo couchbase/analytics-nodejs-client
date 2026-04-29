@@ -284,7 +284,7 @@ export class QueryExecutor {
       `Received non-successful status code from the server: ${res.statusCode}. clientContextId=${this._clientContextId}`
     )
 
-    if (res.statusCode === 401 || res.statusCode === 404) {
+    if (res.statusCode === 401 || res.statusCode === 404 || res.statusCode === 503) {
       res.destroy()
       return reject(new HttpStatusError(res.statusCode))
     }
@@ -296,14 +296,26 @@ export class QueryExecutor {
       try {
         parsed = JSON.parse(raw)
       } catch (e) {
-        if (res.statusCode === 503) {
-          return reject(new HttpStatusError(res.statusCode))
-        }
+        return reject(
+          new AnalyticsError(
+            this._requestContext.attachErrorContext(
+              `Server returned HTTP ${res.statusCode} with a non-JSON body`
+            )
+          )
+        )
       }
 
       if (parsed && parsed.errors && Array.isArray(parsed.errors)) {
         return reject(parsed.errors)
       }
+
+      return reject(
+        new AnalyticsError(
+          this._requestContext.attachErrorContext(
+            `Server returned HTTP ${res.statusCode} with no errors in body`
+          )
+        )
+      )
     })
   }
 

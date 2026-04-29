@@ -98,6 +98,8 @@ export class ErrorHandler {
           )
         )
       )
+    } else if (errs instanceof AnalyticsError) {
+      return RequestBehaviour.fail(errs)
     } else if (errs.name && errs.name === 'AbortError') {
       // We consider AbortError a platform error so we don't wrap it in AnalyticsError
       return RequestBehaviour.fail(errs)
