@@ -210,7 +210,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["macos-13", "macos-14"]
+        os: ["macos-15", "macos-15-intel"]
         node-version: ["20", "22", "24"]
     steps:
       - name: Setup Node.js
