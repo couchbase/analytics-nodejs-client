@@ -386,10 +386,10 @@ function genericAsyncTests(instance: () => Cluster | Scope) {
   })
 }
 
-describe('#Columnar async query - cluster', function () {
+describe('#Enterprise Analytics async query - cluster', function () {
   genericAsyncTests(() => harness.c)
 })
 
-describe('#Columnar async query - scope', function () {
+describe('#Enterprise Analytics async query - scope', function () {
   genericAsyncTests(() => harness.s)
 })

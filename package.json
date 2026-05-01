@@ -9,7 +9,6 @@
   "homepage": "https://www.couchbase.com/developers/sdks",
   "keywords": [
     "couchbase",
-    "columnar",
     "analytics",
     "libcouchbase",
     "memcached",

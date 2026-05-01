@@ -65,7 +65,8 @@ export class AsyncQueryExecutor extends QueryExecutor {
     statement: string,
     options: StartQueryOptions
   ): Promise<StartQueryResponse> {
-    this._operationTimeout = options.timeout || this._cluster.queryTimeout
+    this._operationTimeout =
+      options.timeout || this._cluster.handleRequestTimeout
     const deadline = Date.now() + this._operationTimeout
 
     this._requestContext.setGenericRequestContextFields(

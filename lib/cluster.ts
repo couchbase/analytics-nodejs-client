@@ -54,6 +54,11 @@ export interface TimeoutOptions {
    * Specifies the default timeout for query operations, specified in millseconds.
    */
   queryTimeout?: number
+
+  /**
+   * Specifies the default timeout for server async API handle requests, specified in milliseconds.
+   */
+  handleRequestTimeout?: number
 }
 
 /**
@@ -140,6 +145,7 @@ export interface ClusterOptions {
 export class Cluster {
   private _queryTimeout: number
   private _connectTimeout: number
+  private _handleRequestTimeout: number
   private _httpClient: HttpClient
   private _credential: Credential
   private _maxRetries: number
@@ -157,6 +163,13 @@ export class Cluster {
      */
   get connectTimeout(): number {
     return this._connectTimeout
+  }
+
+  /**
+   * @internal
+   */
+  get handleRequestTimeout(): number {
+    return this._handleRequestTimeout
   }
 
   /**
@@ -224,6 +237,13 @@ export class Cluster {
         )
     }
 
+    if (connStrParams['timeout.handle_request_timeout']) {
+      options.timeoutOptions.handleRequestTimeout =
+        ParsingUtilities.parseGolangSyntaxDuration(
+          connStrParams['timeout.handle_request_timeout']
+        )
+    }
+
     this._validateTimeoutOptions(options.timeoutOptions)
 
     if (!options.securityOptions) {
@@ -247,6 +267,8 @@ export class Cluster {
     this._credential = credential
     this._queryTimeout = options.timeoutOptions.queryTimeout || 600_000
     this._connectTimeout = options.timeoutOptions.connectTimeout || 10_000
+    this._handleRequestTimeout =
+      options.timeoutOptions.handleRequestTimeout || 10_000
     this._deserializer = options.deserializer || new JsonDeserializer()
     this._maxRetries = options.maxRetries || 7
     this._httpClient = new HttpClient(
@@ -356,6 +378,13 @@ export class Cluster {
 
     if (timeoutOptions.queryTimeout && timeoutOptions.queryTimeout < 0) {
       throw new Error('queryTimeout must be non-negative')
+    }
+
+    if (
+      timeoutOptions.handleRequestTimeout &&
+      timeoutOptions.handleRequestTimeout < 0
+    ) {
+      throw new Error('handleRequestTimeout must be non-negative')
     }
   }
 
