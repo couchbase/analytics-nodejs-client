@@ -585,13 +585,6 @@ export class QueryResultHandle {
   }
 
   /**
-   * The request ID associated with this query result.
-   */
-  get requestId(): string {
-    return this._requestId
-  }
-
-  /**
    * Fetches the query results from the server.
    * Returns a {@link QueryResult} which provides a stream of rows.
    *

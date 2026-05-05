@@ -261,7 +261,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
     statement: string,
     options: QueryOptions
   ): BuiltQueryRequest {
-    const requestOptions = this._buildRequestOptions(statement, options)
+    const requestOptions = this._buildQueryRequest(statement, options)
     requestOptions.mode = 'async'
     return requestOptions
   }

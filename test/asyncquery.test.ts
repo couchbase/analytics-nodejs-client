@@ -61,8 +61,6 @@ function genericAsyncTests(instance: () => Cluster | Scope) {
       const resultHandle = await waitForResults(handle)
 
       assert.instanceOf(resultHandle, QueryResultHandle)
-      assert.isString(resultHandle.requestId)
-      assert.isNotEmpty(resultHandle.requestId)
 
       const queryResult = await resultHandle.fetchResults()
       const results: any[] = []
@@ -156,7 +154,6 @@ function genericAsyncTests(instance: () => Cluster | Scope) {
 
       const resultHandle = await waitForResults(handle)
       assert.instanceOf(resultHandle, QueryResultHandle)
-      assert.isNotEmpty(resultHandle.requestId)
     })
 
     it('should start async query with named parameters', async function () {

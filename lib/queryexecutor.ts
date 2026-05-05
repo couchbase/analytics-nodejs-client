@@ -119,7 +119,7 @@ export class QueryExecutor {
       '/api/v1/request',
       'POST'
     )
-    const encodedOptions = this._buildRequestOptions(statement, options)
+    const encodedOptions = this._buildQueryRequest(statement, options)
     const body = JSON.stringify(encodedOptions)
 
     const requestOptions: http.RequestOptions = {
@@ -284,7 +284,11 @@ export class QueryExecutor {
       `Received non-successful status code from the server: ${res.statusCode}. clientContextId=${this._clientContextId}`
     )
 
-    if (res.statusCode === 401 || res.statusCode === 404 || res.statusCode === 503) {
+    if (
+      res.statusCode === 401 ||
+      res.statusCode === 404 ||
+      res.statusCode === 503
+    ) {
       res.destroy()
       return reject(new HttpStatusError(res.statusCode))
     }
@@ -346,7 +350,7 @@ export class QueryExecutor {
   /**
    * @internal
    */
-  protected _buildRequestOptions(
+  protected _buildQueryRequest(
     statement: string,
     options: QueryOptions
   ): BuiltQueryRequest {
