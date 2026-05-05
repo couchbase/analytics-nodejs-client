@@ -47,15 +47,15 @@ import { CouchbaseLogger } from './logger.js'
  * @internal
  */
 export class QueryExecutor {
-  private _cluster: Cluster
-  private _requestContext: RequestContext
-  private _databaseName: string | undefined
-  private _scopeName: string | undefined
+  protected _cluster: Cluster
+  protected _requestContext: RequestContext
+  protected _databaseName: string | undefined
+  protected _scopeName: string | undefined
   private _metadata: QueryMetadata | undefined
   private _deserializer: Deserializer
   private _abortController: AbortController
-  private _signal: AbortSignal
-  private _clientContextId: string | undefined
+  protected _signal: AbortSignal
+  protected _clientContextId: string | undefined
 
   /**
    * @internal
@@ -119,7 +119,7 @@ export class QueryExecutor {
       '/api/v1/request',
       'POST'
     )
-    const encodedOptions = this._buildRequestOptions(statement, options)
+    const encodedOptions = this._buildQueryRequest(statement, options)
     const body = JSON.stringify(encodedOptions)
 
     const requestOptions: http.RequestOptions = {
@@ -145,7 +145,7 @@ export class QueryExecutor {
    *
    * @internal
    */
-  async _attemptQuery(
+  private async _attemptQuery(
     requestOptions: http.RequestOptions,
     body: string,
     deadline: number
@@ -164,7 +164,7 @@ export class QueryExecutor {
           CouchbaseLogger.debug(
             `Received query response from ${requestOptions.hostname}:${requestOptions.port}. statusCode=${res.statusCode} clientContextId=${this._clientContextId}`
           )
-          this._handleResponse(res, resolve, reject, deadline)
+          this._handleStreamingResponse(res, resolve, reject, deadline)
         }
       )
 
@@ -178,9 +178,7 @@ export class QueryExecutor {
         )
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
-        reject(
-          new ConnectionError(err, true)
-        )
+        reject(new ConnectionError(err, true))
       })
 
       req.on('connectTimeout', () => {
@@ -203,11 +201,12 @@ export class QueryExecutor {
     })
   }
 
-  private _handleResponse(
+  protected _handleStreamingResponse(
     res: http.IncomingMessage,
     resolve: (value: QueryResult) => void,
     reject: (err: any) => void,
-    deadline: number
+    deadline: number,
+    deserializer?: Deserializer
   ): void {
     res.once('error', (err) => {
       CouchbaseLogger.error(
@@ -225,7 +224,13 @@ export class QueryExecutor {
 
     const jsonTokenizer: Parser = parser()
     const jsonTokenParser = new JsonTokenParserStream()
-    const queryStream = new QueryResultStream(this, deadline, this._signal)
+    const effectiveDeserializer = deserializer ?? this._deserializer
+    const queryStream = new QueryResultStream(
+      this,
+      deadline,
+      this._signal,
+      effectiveDeserializer
+    )
 
     jsonTokenizer.once('error', (err) => {
       res.destroy()
@@ -271,7 +276,7 @@ export class QueryExecutor {
     })
   }
 
-  private _handleNonSuccessfulStatusCode(
+  protected _handleNonSuccessfulStatusCode(
     res: http.IncomingMessage,
     reject: (err: any) => void
   ): void {
@@ -279,7 +284,11 @@ export class QueryExecutor {
       `Received non-successful status code from the server: ${res.statusCode}. clientContextId=${this._clientContextId}`
     )
 
-    if (res.statusCode === 401) {
+    if (
+      res.statusCode === 401 ||
+      res.statusCode === 404 ||
+      res.statusCode === 503
+    ) {
       res.destroy()
       return reject(new HttpStatusError(res.statusCode))
     }
@@ -291,18 +300,30 @@ export class QueryExecutor {
       try {
         parsed = JSON.parse(raw)
       } catch (e) {
-        if (res.statusCode === 503) {
-          return reject(new HttpStatusError(res.statusCode))
-        }
+        return reject(
+          new AnalyticsError(
+            this._requestContext.attachErrorContext(
+              `Server returned HTTP ${res.statusCode} with a non-JSON body`
+            )
+          )
+        )
       }
 
       if (parsed && parsed.errors && Array.isArray(parsed.errors)) {
         return reject(parsed.errors)
       }
+
+      return reject(
+        new AnalyticsError(
+          this._requestContext.attachErrorContext(
+            `Server returned HTTP ${res.statusCode} with no errors in body`
+          )
+        )
+      )
     })
   }
 
-  private _attachConnectTimeout(req: http.ClientRequest): void {
+  protected _attachConnectTimeout(req: http.ClientRequest): void {
     req.on('socket', (socket) => {
       if (!socket.connecting) {
         return
@@ -329,7 +350,7 @@ export class QueryExecutor {
   /**
    * @internal
    */
-  private _buildRequestOptions(
+  protected _buildQueryRequest(
     statement: string,
     options: QueryOptions
   ): BuiltQueryRequest {
@@ -391,9 +412,10 @@ export class QueryExecutor {
 /**
  * @internal
  */
-type BuiltQueryRequest = {
+export type BuiltQueryRequest = {
   statement: string
   client_context_id: string
+  mode?: string
   query_context?: string
   args?: any[]
   readonly?: boolean

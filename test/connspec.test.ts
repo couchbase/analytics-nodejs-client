@@ -108,7 +108,9 @@ describe('#ConnSpec', function () {
 
       for (const duration of invalidDurations) {
         await harness.throwsHelper(() => {
-          return Promise.resolve(ParsingUtilities.parseGolangSyntaxDuration(duration))
+          return Promise.resolve(
+            ParsingUtilities.parseGolangSyntaxDuration(duration)
+          )
         }, Error)
       }
     })

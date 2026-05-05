@@ -125,6 +125,15 @@ module.exports = {
     // We intentionally use `any` in a few places for user values.
     '@typescript-eslint/no-explicit-any': 'off',
 
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+      },
+    ],
+
     // There are a number of places we need to do this for code clarity,
     // especially around handling backwards-compatibility.
     'prefer-rest-params': 'off',

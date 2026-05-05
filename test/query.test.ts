@@ -327,10 +327,10 @@ function genericTests(instance: () => Cluster | Scope) {
   })
 }
 
-describe('#Columnar query - cluster', function () {
+describe('#Enterprise Analytics query - cluster', function () {
   genericTests(() => harness.c)
 })
 
-describe('#Columnar query - scope', function ()  {
-    genericTests(() => harness.s)
+describe('#Enterprise Analytics query - scope', function () {
+  genericTests(() => harness.s)
 })
