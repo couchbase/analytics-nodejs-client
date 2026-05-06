@@ -78,18 +78,21 @@ export class AsyncQueryExecutor extends QueryExecutor {
     const encodedOptions = this._buildAsyncRequestOptions(statement, options)
     const body = JSON.stringify(encodedOptions)
 
-    const requestOptions: http.RequestOptions = {
-      ...this._cluster.httpClient.genericRequestOptions(),
-      method: 'POST',
-      path: '/api/v1/request',
-      headers: {
-        'Content-Length': Buffer.byteLength(body),
-        'Content-Type': 'application/json',
-      },
-    }
-
     return await runWithRetry(
-      () => this._attemptStartQuery(requestOptions, body),
+      () => {
+        const generic = this._cluster.httpClient.genericRequestOptions()
+        const requestOptions: http.RequestOptions = {
+          ...generic,
+          method: 'POST',
+          path: '/api/v1/request',
+          headers: {
+            ...generic.headers,
+            'Content-Length': Buffer.byteLength(body),
+            'Content-Type': 'application/json',
+          },
+        }
+        return this._attemptStartQuery(requestOptions, body)
+      },
       (errs) => ErrorHandler.handleErrors(errs, this._requestContext),
       deadline,
       this._requestContext
@@ -104,15 +107,17 @@ export class AsyncQueryExecutor extends QueryExecutor {
 
     this._requestContext.setGenericRequestContextFields('', statusHandle, 'GET')
 
-    const requestOptions: http.RequestOptions = {
-      ...this._cluster.httpClient.genericRequestOptions(),
-      method: 'GET',
-      path: statusHandle,
-      headers: { 'Content-Type': 'application/json' },
-    }
-
     return await runWithRetry(
-      () => this._attemptJsonRequest(requestOptions),
+      () => {
+        const generic = this._cluster.httpClient.genericRequestOptions()
+        const requestOptions: http.RequestOptions = {
+          ...generic,
+          method: 'GET',
+          path: statusHandle,
+          headers: { ...generic.headers, 'Content-Type': 'application/json' },
+        }
+        return this._attemptJsonRequest(requestOptions)
+      },
       (errs) => ErrorHandler.handleErrors(errs, this._requestContext),
       deadline,
       this._requestContext
@@ -130,18 +135,21 @@ export class AsyncQueryExecutor extends QueryExecutor {
 
     const body = `request_id=${encodeURIComponent(requestId)}`
 
-    const requestOptions: http.RequestOptions = {
-      ...this._cluster.httpClient.genericRequestOptions(),
-      method: 'DELETE',
-      path: path,
-      headers: {
-        'Content-Length': Buffer.byteLength(body),
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    }
-
     return await runWithRetry(
-      () => this._attemptCancelQuery(requestOptions, body),
+      () => {
+        const generic = this._cluster.httpClient.genericRequestOptions()
+        const requestOptions: http.RequestOptions = {
+          ...generic,
+          method: 'DELETE',
+          path: path,
+          headers: {
+            ...generic.headers,
+            'Content-Length': Buffer.byteLength(body),
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        }
+        return this._attemptCancelQuery(requestOptions, body)
+      },
       (errs) => ErrorHandler.handleErrors(errs, this._requestContext),
       deadline,
       this._requestContext
@@ -159,15 +167,17 @@ export class AsyncQueryExecutor extends QueryExecutor {
 
     this._requestContext.setGenericRequestContextFields('', resultHandle, 'GET')
 
-    const requestOptions: http.RequestOptions = {
-      ...this._cluster.httpClient.genericRequestOptions(),
-      method: 'GET',
-      path: resultHandle,
-      headers: { 'Content-Type': 'application/json' },
-    }
-
     return await runWithRetry(
-      () => this._attemptFetchResults(requestOptions, deadline, deserializer),
+      () => {
+        const generic = this._cluster.httpClient.genericRequestOptions()
+        const requestOptions: http.RequestOptions = {
+          ...generic,
+          method: 'GET',
+          path: resultHandle,
+          headers: { ...generic.headers, 'Content-Type': 'application/json' },
+        }
+        return this._attemptFetchResults(requestOptions, deadline, deserializer)
+      },
       (errs) => ErrorHandler.handleErrors(errs, this._requestContext),
       deadline,
       this._requestContext
@@ -186,15 +196,17 @@ export class AsyncQueryExecutor extends QueryExecutor {
       'DELETE'
     )
 
-    const requestOptions: http.RequestOptions = {
-      ...this._cluster.httpClient.genericRequestOptions(),
-      method: 'DELETE',
-      path: resultHandle,
-      headers: { 'Content-Type': 'application/json' },
-    }
-
     return await runWithRetry(
-      () => this._attemptDiscardResults(requestOptions),
+      () => {
+        const generic = this._cluster.httpClient.genericRequestOptions()
+        const requestOptions: http.RequestOptions = {
+          ...generic,
+          method: 'DELETE',
+          path: resultHandle,
+          headers: { ...generic.headers, 'Content-Type': 'application/json' },
+        }
+        return this._attemptDiscardResults(requestOptions)
+      },
       (errs) => ErrorHandler.handleErrors(errs, this._requestContext),
       deadline,
       this._requestContext

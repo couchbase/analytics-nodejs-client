@@ -15,48 +15,155 @@
  *  limitations under the License.
  */
 
-/**
- * ICredential specifies a credential which uses an RBAC
- * username and password to authenticate with the cluster.
- *
- * @category Authentication
- */
-export interface ICredential {
-  /**
-   * The username to authenticate with.
-   */
-  username: string
+import * as http from 'node:http'
+import { InvalidArgumentError } from './errors.js'
 
-  /**
-   * The password to authenticate with.
-   */
-  password: string
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHAR_RE = /[\x00-\x1F\x7F]/
+
+/**
+ * Reject any control character (including CR/LF/NUL) in a value that will be
+ * interpolated into an HTTP header, to prevent header-injection.
+ *
+ * @internal
+ */
+function assertNoControlChars(value: string, fieldName: string): void {
+  if (CONTROL_CHAR_RE.test(value)) {
+    throw new InvalidArgumentError(
+      `${fieldName} must not contain control characters.`
+    )
+  }
 }
 
 /**
- * Credential implements a simple ICredential.
+ * The kind of authentication a credential carries.
+ *
+ * @internal
+ */
+export enum CredentialType {
+  /** Username and password authentication, sent as HTTP Basic. */
+  Password = 'password',
+  /** JSON Web Token authentication, sent as HTTP Bearer. */
+  Jwt = 'jwt',
+}
+
+/**
+ * Credential carries authentication material for an Analytics cluster.
+ *
+ * Use `new Credential(username, password)` (or the equivalent
+ * {@link Credential.of}) for RBAC, or {@link Credential.ofJwt} for a JSON
+ * Web Token.
  *
  * @category Authentication
  */
-export class Credential implements ICredential {
-  /**
-   * The username that will be used to authenticate with.
-   */
+export class Credential {
+  /** The username to authenticate with. Empty for JWT credentials. */
   username: string
 
-  /**
-   * The password that will be used to authenticate with.
-   */
+  /** The password to authenticate with. Empty for JWT credentials. */
   password: string
 
+  /** @internal */
+  protected _credentialType: CredentialType
+
   /**
-   * Constructs this Credential with the passed username and password.
+   * Constructs a {@link Credential} for an RBAC username and password. The
+   * SDK sends `Authorization: Basic <base64(user:pass)>` on every request.
    *
-   * @param username The username to initialize this credential with.
-   * @param password The password to initialize this credential with.
+   * @param username The username to authenticate with.
+   * @param password The password to authenticate with.
    */
   constructor(username: string, password: string) {
+    if (typeof username !== 'string') {
+      throw new InvalidArgumentError('Username must be a string.')
+    }
+    if (typeof password !== 'string') {
+      throw new InvalidArgumentError('Password must be a string.')
+    }
+    if (username.includes(':')) {
+      throw new InvalidArgumentError(
+        "Username must not contain ':' (the HTTP Basic auth separator)."
+      )
+    }
     this.username = username
     this.password = password
+    this._credentialType = CredentialType.Password
+  }
+
+  /**
+   * The kind of credential this instance carries. Used to enforce same-type
+   * rotation in `Cluster.setCredential`.
+   *
+   * @internal
+   */
+  get credentialType(): CredentialType {
+    return this._credentialType
+  }
+
+  /**
+   * Apply this credential's auth to an outgoing HTTP request.
+   *
+   * @internal
+   */
+  applyToRequest(opts: http.RequestOptions): void {
+    const headers = (opts.headers ??= {}) as Record<string, string>
+    headers.Authorization =
+      'Basic ' +
+      Buffer.from(`${this.username}:${this.password}`, 'utf8').toString(
+        'base64'
+      )
+  }
+
+  /**
+   * Equivalent to `new Credential(username, password)`.
+   *
+   * @param username The username to authenticate with.
+   * @param password The password to authenticate with.
+   */
+  static of(username: string, password: string): Credential {
+    return new Credential(username, password)
+  }
+
+  /**
+   * Construct a {@link Credential} from a JSON Web Token. The SDK sends
+   * `Authorization: Bearer <token>` on every request. To rotate the token
+   * before it expires, pass a fresh one to `Cluster.setCredential`.
+   *
+   * @param token The JSON Web Token.
+   */
+  static ofJwt(token: string): Credential {
+    return new JwtCredential(token)
+  }
+}
+
+/**
+ * @internal
+ */
+class JwtCredential extends Credential {
+  private readonly _authorizationHeader: string
+
+  constructor(token: string) {
+    if (typeof token !== 'string') {
+      throw new InvalidArgumentError('JWT token must be a string.')
+    }
+    const trimmed = token.trim()
+    if (trimmed.length === 0) {
+      throw new InvalidArgumentError('JWT token must not be empty.')
+    }
+    // The token is interpolated directly into the Authorization header, so any
+    // control character would let a caller inject additional headers.
+    assertNoControlChars(trimmed, 'JWT token')
+
+    super('', '')
+    this._credentialType = CredentialType.Jwt
+    this._authorizationHeader = `Bearer ${trimmed}`
+  }
+
+  /**
+   * @internal
+   */
+  applyToRequest(opts: http.RequestOptions): void {
+    const headers = (opts.headers ??= {}) as Record<string, string>
+    headers.Authorization = this._authorizationHeader
   }
 }

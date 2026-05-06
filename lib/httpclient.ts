@@ -26,6 +26,7 @@ import * as fs from 'fs'
 import * as http from 'node:http'
 import * as https from 'node:https'
 import * as dns from 'node:dns'
+import * as net from 'node:net'
 
 /**
  * @internal
@@ -33,7 +34,7 @@ import * as dns from 'node:dns'
 export class HttpClient {
   private _agent: HttpAgent | HttpsAgent
   private _module: typeof http | typeof https
-  private _auth: string
+  private _credential: Credential
   private _hostname: string
   private _port: string
 
@@ -43,30 +44,22 @@ export class HttpClient {
     securityOptions: SecurityOptions
   ) {
     this._hostname = url.hostname
-    this._auth = `${credential.username}:${credential.password}`
+    this._credential = credential
     this.randomLookup = this.randomLookup.bind(this)
 
     if (url.protocol === 'http:') {
       this._port = url.port ?? '80'
-      this._agent = new HttpAgent({
-        keepAlive: true,
-        lookup: this.randomLookup,
-      })
       this._module = http
     } else if (url.protocol === 'https:') {
       this._port = url.port ?? '443'
-      const tlsOptions = this._buildTlsOptions(securityOptions)
-      this._agent = new HttpsAgent({
-        keepAlive: true,
-        lookup: this.randomLookup,
-        ...tlsOptions,
-      })
       this._module = https
     } else {
       throw new AnalyticsError(
         'Unsupported protocol provided in connection string'
       )
     }
+
+    this._agent = this._buildAgent(securityOptions)
   }
 
   /**
@@ -77,15 +70,36 @@ export class HttpClient {
   }
 
   /**
+   * Base request options with the current credential's auth applied. Read
+   * each time so a credential rotated via {@link setCredential} takes effect
+   * on the next call.
+   *
    * @internal
    */
   genericRequestOptions(): http.RequestOptions {
-    return {
+    const opts: http.RequestOptions = {
       agent: this._agent,
       hostname: this._hostname,
       port: this._port,
-      auth: this._auth,
     }
+    this._credential.applyToRequest(opts)
+    return opts
+  }
+
+  /**
+   * Replace the credential used for subsequent requests.
+   *
+   * @internal
+   */
+  setCredential(credential: Credential): void {
+    this._credential = credential
+  }
+
+  /**
+   * @internal
+   */
+  get credential(): Credential {
+    return this._credential
   }
 
   /**
@@ -97,13 +111,31 @@ export class HttpClient {
     }
   }
 
+  private _buildAgent(securityOptions: SecurityOptions): HttpAgent | HttpsAgent {
+    if (this._module === http) {
+      return new HttpAgent({
+        keepAlive: true,
+        lookup: this.randomLookup,
+      })
+    }
+    const tlsOptions = this._buildTlsOptions(securityOptions)
+    return new HttpsAgent({
+      keepAlive: true,
+      lookup: this.randomLookup,
+      ...tlsOptions,
+    })
+  }
+
   private _buildTlsOptions(
     securityOptions: SecurityOptions
   ): tls.ConnectionOptions {
     const tlsOptions: tls.ConnectionOptions = {}
 
-    // Override the servername to use the hostname rather than the DNS record
-    tlsOptions.servername = this._hostname
+    // Override the servername to use the hostname rather than the DNS record.
+    // SNI is only valid for DNS names (RFC 6066), so skip when connecting via IP.
+    if (net.isIP(this._hostname) === 0) {
+      tlsOptions.servername = this._hostname
+    }
 
     tlsOptions.minVersion = 'TLSv1.3'
 

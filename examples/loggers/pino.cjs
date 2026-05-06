@@ -45,7 +45,7 @@ async function main() {
     const password = 'password'
     // User Input ends here.
 
-    const credential = new analytics.Credential(username, password)
+    const credential = analytics.Credential.of(username, password)
     const cluster = analytics.createInstance(clusterConnStr, credential, {
         logger: couchbaseLogger,
     })

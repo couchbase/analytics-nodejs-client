@@ -204,6 +204,9 @@ export class Cluster {
     if (!options) {
       options = {}
     }
+    if (credential == null) {
+      throw new InvalidArgumentError('credential must not be null/undefined.')
+    }
 
     if (!options.logger) {
       const envLogLevel = (
@@ -360,6 +363,29 @@ export class Cluster {
     const response = await exec.startQuery(statement, options)
     return new QueryHandle(exec, response)
   }
+
+  /**
+   * Replace the credential used for subsequent HTTP requests, for example to
+   * refresh a JWT before it expires. The new credential must be the same
+   * kind as the current one and takes effect on the next request.
+   *
+   * @param credential The new credential to use.
+   * @throws {InvalidArgumentError} If `credential` is null/undefined or is a
+   *   different kind than the current credential.
+   */
+  setCredential(credential: Credential): void {
+    if (credential == null) {
+      throw new InvalidArgumentError('credential must not be null/undefined.')
+    }
+    if (credential.credentialType !== this._credential.credentialType) {
+      throw new InvalidArgumentError(
+        `Cannot switch credential type at runtime; current is '${this._credential.credentialType}', new is '${credential.credentialType}'.`
+      )
+    }
+    this._credential = credential
+    this._httpClient.setCredential(credential)
+  }
+
   /**
    * Shuts down this cluster object.  Cleaning up all resources associated with it.
    *
