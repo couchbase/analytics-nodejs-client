@@ -273,7 +273,7 @@ class Harness {
   }
 
   get credentials(): Credential {
-    return Credential.of(this._user as string, this._pass as string)
+    return new Credential(this._user as string, this._pass as string)
   }
 
   get nonprod(): boolean {
@@ -354,7 +354,7 @@ class Harness {
     const username = options.username || this._user
     const password = options.password || this._pass
 
-    const credential = Credential.of(username as string, password as string)
+    const credential = new Credential(username as string, password as string)
 
     if (!options.connstr) {
       options.connstr = this._connstr

@@ -15,7 +15,11 @@
  *  limitations under the License.
  */
 
-import { Credential } from './credential.js'
+import {
+  assertClusterCredential,
+  getCredentialType,
+  type ClusterCredential,
+} from './credential.js'
 import { Database } from './database.js'
 import { Deserializer, JsonDeserializer } from './deserializers.js'
 import {
@@ -147,7 +151,6 @@ export class Cluster {
   private _connectTimeout: number
   private _handleRequestTimeout: number
   private _httpClient: HttpClient
-  private _credential: Credential
   private _maxRetries: number
   private _deserializer: Deserializer
 
@@ -198,15 +201,13 @@ export class Cluster {
      */
   private constructor(
     httpEndpoint: string,
-    credential: Credential,
+    credential: ClusterCredential,
     options?: ClusterOptions
   ) {
     if (!options) {
       options = {}
     }
-    if (credential == null) {
-      throw new InvalidArgumentError('credential must not be null/undefined.')
-    }
+    assertClusterCredential(credential)
 
     if (!options.logger) {
       const envLogLevel = (
@@ -267,7 +268,6 @@ export class Cluster {
 
     this._validateSecurityOptions(options.securityOptions)
 
-    this._credential = credential
     this._queryTimeout = options.timeoutOptions.queryTimeout || 600_000
     this._connectTimeout = options.timeoutOptions.connectTimeout || 10_000
     this._handleRequestTimeout =
@@ -276,7 +276,7 @@ export class Cluster {
     this._maxRetries = options.maxRetries || 7
     this._httpClient = new HttpClient(
       url,
-      this._credential,
+      credential,
       options.securityOptions
     )
   }
@@ -290,7 +290,7 @@ export class Cluster {
    */
   static createInstance(
     httpEndpoint: string,
-    credential: Credential,
+    credential: ClusterCredential,
     options?: ClusterOptions
   ): Cluster {
     return new Cluster(httpEndpoint, credential, options)
@@ -373,16 +373,15 @@ export class Cluster {
    * @throws {InvalidArgumentError} If `credential` is null/undefined or is a
    *   different kind than the current credential.
    */
-  setCredential(credential: Credential): void {
-    if (credential == null) {
-      throw new InvalidArgumentError('credential must not be null/undefined.')
-    }
-    if (credential.credentialType !== this._credential.credentialType) {
+  setCredential(credential: ClusterCredential): void {
+    assertClusterCredential(credential)
+    const currentCredentialType = getCredentialType(this._httpClient.credential)
+    const newCredentialType = getCredentialType(credential)
+    if (newCredentialType !== currentCredentialType) {
       throw new InvalidArgumentError(
-        `Cannot switch credential type at runtime; current is '${this._credential.credentialType}', new is '${credential.credentialType}'.`
+        `Cannot switch credential type at runtime; current is '${currentCredentialType}', new is '${newCredentialType}'.`
       )
     }
-    this._credential = credential
     this._httpClient.setCredential(credential)
   }
 

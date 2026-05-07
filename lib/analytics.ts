@@ -15,7 +15,7 @@
  *  limitations under the License.
  */
 
-import { Credential } from './credential.js'
+import type { ClusterCredential } from './credential.js'
 import { Cluster, ClusterOptions } from './cluster.js'
 
 /**
@@ -29,7 +29,7 @@ import { Cluster, ClusterOptions } from './cluster.js'
  */
 export function createInstance(
   connStr: string,
-  credential: Credential,
+  credential: ClusterCredential,
   options?: ClusterOptions
 ): Cluster {
   return Cluster.createInstance(connStr, credential, options)
@@ -40,7 +40,8 @@ export * from './database.js'
 export * from './deserializers.js'
 export * from './certificates.js'
 export * from './cluster.js'
-export * from './credential.js'
+export { Credential, JwtCredential } from './credential.js'
+export type { ClusterCredential } from './credential.js'
 export * from './errors.js'
 export * from './scope.js'
 export * from './logger.js'

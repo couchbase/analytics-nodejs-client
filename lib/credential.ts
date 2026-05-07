@@ -36,35 +36,71 @@ function assertNoControlChars(value: string, fieldName: string): void {
 }
 
 /**
- * The kind of authentication a credential carries.
+ * @internal
+ */
+function validateUsername(username: string): void {
+  if (typeof username !== 'string') {
+    throw new InvalidArgumentError('Username must be a string.')
+  }
+  if (username.includes(':')) {
+    throw new InvalidArgumentError(
+      "Username must not contain ':' (the HTTP Basic auth separator)."
+    )
+  }
+}
+
+/**
+ * @internal
+ */
+function validatePassword(password: string): void {
+  if (typeof password !== 'string') {
+    throw new InvalidArgumentError('Password must be a string.')
+  }
+}
+
+/**
+ * @internal
+ */
+function buildBasicAuthorizationHeader(
+  username: string,
+  password: string
+): string {
+  return (
+    'Basic ' +
+    Buffer.from(`${username}:${password}`, 'utf8').toString('base64')
+  )
+}
+
+/**
+ * Discriminates between password and JWT credentials.
  *
  * @internal
  */
-export enum CredentialType {
+enum CredentialType {
   /** Username and password authentication, sent as HTTP Basic. */
   Password = 'password',
   /** JSON Web Token authentication, sent as HTTP Bearer. */
   Jwt = 'jwt',
 }
 
+const passwordCredentialState = new WeakMap<
+  Credential,
+  { authorizationHeader: string }
+>()
+const jwtCredentialState = new WeakMap<
+  JwtCredential,
+  { authorizationHeader: string }
+>()
+
 /**
- * Credential carries authentication material for an Analytics cluster.
- *
- * Use `new Credential(username, password)` (or the equivalent
- * {@link Credential.of}) for RBAC, or {@link Credential.ofJwt} for a JSON
- * Web Token.
+ * RBAC username/password for authenticating to an Analytics cluster. For
+ * a JSON Web Token instead, see {@link JwtCredential}.
  *
  * @category Authentication
  */
 export class Credential {
-  /** The username to authenticate with. Empty for JWT credentials. */
-  username: string
-
-  /** The password to authenticate with. Empty for JWT credentials. */
-  password: string
-
-  /** @internal */
-  protected _credentialType: CredentialType
+  private _username: string
+  private _password: string
 
   /**
    * Constructs a {@link Credential} for an RBAC username and password. The
@@ -74,74 +110,50 @@ export class Credential {
    * @param password The password to authenticate with.
    */
   constructor(username: string, password: string) {
-    if (typeof username !== 'string') {
-      throw new InvalidArgumentError('Username must be a string.')
-    }
-    if (typeof password !== 'string') {
-      throw new InvalidArgumentError('Password must be a string.')
-    }
-    if (username.includes(':')) {
-      throw new InvalidArgumentError(
-        "Username must not contain ':' (the HTTP Basic auth separator)."
-      )
-    }
-    this.username = username
-    this.password = password
-    this._credentialType = CredentialType.Password
+    validateUsername(username)
+    validatePassword(password)
+    this._username = username
+    this._password = password
+    refreshPasswordCredentialState(this)
   }
 
-  /**
-   * The kind of credential this instance carries. Used to enforce same-type
-   * rotation in `Cluster.setCredential`.
-   *
-   * @internal
-   */
-  get credentialType(): CredentialType {
-    return this._credentialType
+  /** The username to authenticate with. */
+  get username(): string {
+    return this._username
   }
 
-  /**
-   * Apply this credential's auth to an outgoing HTTP request.
-   *
-   * @internal
-   */
-  applyToRequest(opts: http.RequestOptions): void {
-    const headers = (opts.headers ??= {}) as Record<string, string>
-    headers.Authorization =
-      'Basic ' +
-      Buffer.from(`${this.username}:${this.password}`, 'utf8').toString(
-        'base64'
-      )
+  set username(username: string) {
+    validateUsername(username)
+    this._username = username
+    refreshPasswordCredentialState(this)
   }
 
-  /**
-   * Equivalent to `new Credential(username, password)`.
-   *
-   * @param username The username to authenticate with.
-   * @param password The password to authenticate with.
-   */
-  static of(username: string, password: string): Credential {
-    return new Credential(username, password)
+  /** The password to authenticate with. */
+  get password(): string {
+    return this._password
   }
 
-  /**
-   * Construct a {@link Credential} from a JSON Web Token. The SDK sends
-   * `Authorization: Bearer <token>` on every request. To rotate the token
-   * before it expires, pass a fresh one to `Cluster.setCredential`.
-   *
-   * @param token The JSON Web Token.
-   */
-  static ofJwt(token: string): Credential {
-    return new JwtCredential(token)
+  set password(password: string) {
+    validatePassword(password)
+    this._password = password
+    refreshPasswordCredentialState(this)
   }
 }
 
 /**
- * @internal
+ * A JSON Web Token for authenticating to an Analytics cluster.
+ *
+ * @category Authentication
  */
-class JwtCredential extends Credential {
-  private readonly _authorizationHeader: string
+export class JwtCredential {
+  private readonly _jwtCredentialBrand: undefined
 
+  /**
+   * Constructs a {@link JwtCredential}. The SDK sends
+   * `Authorization: Bearer <token>` on every request.
+   *
+   * @param token The JSON Web Token.
+   */
   constructor(token: string) {
     if (typeof token !== 'string') {
       throw new InvalidArgumentError('JWT token must be a string.')
@@ -154,16 +166,77 @@ class JwtCredential extends Credential {
     // control character would let a caller inject additional headers.
     assertNoControlChars(trimmed, 'JWT token')
 
-    super('', '')
-    this._credentialType = CredentialType.Jwt
-    this._authorizationHeader = `Bearer ${trimmed}`
+    jwtCredentialState.set(this, { authorizationHeader: `Bearer ${trimmed}` })
+  }
+}
+
+/**
+ * Credential variants accepted by an Analytics cluster.
+ *
+ * @category Authentication
+ */
+export type ClusterCredential = Credential | JwtCredential
+
+/**
+ * @internal
+ */
+function refreshPasswordCredentialState(credential: Credential): void {
+  passwordCredentialState.set(credential, {
+    authorizationHeader: buildBasicAuthorizationHeader(
+      credential.username,
+      credential.password
+    ),
+  })
+}
+
+/**
+ * @internal
+ */
+export function assertClusterCredential(
+  credential: unknown
+): asserts credential is ClusterCredential {
+  if (credential == null) {
+    throw new InvalidArgumentError('credential must not be null/undefined.')
+  }
+  if (!(credential instanceof Credential || credential instanceof JwtCredential)) {
+    throw new InvalidArgumentError(
+      'credential must be a Credential or JwtCredential.'
+    )
+  }
+}
+
+/**
+ * @internal
+ */
+export function getCredentialType(credential: ClusterCredential): CredentialType {
+  assertClusterCredential(credential)
+  if (credential instanceof Credential) {
+    return CredentialType.Password
+  }
+  return CredentialType.Jwt
+}
+
+/**
+ * @internal
+ */
+export function applyCredentialToRequest(
+  credential: ClusterCredential,
+  opts: http.RequestOptions
+): void {
+  assertClusterCredential(credential)
+  const headers = (opts.headers ??= {}) as Record<string, string>
+  if (credential instanceof Credential) {
+    const state = passwordCredentialState.get(credential)
+    if (!state) {
+      throw new InvalidArgumentError('credential must be a Credential.')
+    }
+    headers.Authorization = state.authorizationHeader
+    return
   }
 
-  /**
-   * @internal
-   */
-  applyToRequest(opts: http.RequestOptions): void {
-    const headers = (opts.headers ??= {}) as Record<string, string>
-    headers.Authorization = this._authorizationHeader
+  const state = jwtCredentialState.get(credential)
+  if (!state) {
+    throw new InvalidArgumentError('credential must be a JwtCredential.')
   }
+  headers.Authorization = state.authorizationHeader
 }

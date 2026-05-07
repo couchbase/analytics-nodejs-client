@@ -24,7 +24,7 @@ async function main() {
   const password = 'password'
   // User Input ends here.
 
-  const credential = analytics.Credential.of(username, password)
+  const credential = new analytics.Credential(username, password)
   const cluster = analytics.createInstance(clusterConnStr, credential, {
     // NOTE:  Only an example on how to use options.  Not a recommendation.
     timeoutOptions: {

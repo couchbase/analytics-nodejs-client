@@ -17,8 +17,12 @@
 
 import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
+import { isIP } from 'node:net'
 import { AnalyticsError } from './errors.js'
-import { Credential } from './credential.js'
+import {
+  applyCredentialToRequest,
+  type ClusterCredential,
+} from './credential.js'
 import { SecurityOptions } from './cluster.js'
 import { Certificates } from './certificates.js'
 import * as tls from 'node:tls'
@@ -26,7 +30,6 @@ import * as fs from 'fs'
 import * as http from 'node:http'
 import * as https from 'node:https'
 import * as dns from 'node:dns'
-import * as net from 'node:net'
 
 /**
  * @internal
@@ -34,13 +37,13 @@ import * as net from 'node:net'
 export class HttpClient {
   private _agent: HttpAgent | HttpsAgent
   private _module: typeof http | typeof https
-  private _credential: Credential
+  private _credential: ClusterCredential
   private _hostname: string
   private _port: string
 
   constructor(
     url: URL,
-    credential: Credential,
+    credential: ClusterCredential,
     securityOptions: SecurityOptions
   ) {
     this._hostname = url.hostname
@@ -82,7 +85,7 @@ export class HttpClient {
       hostname: this._hostname,
       port: this._port,
     }
-    this._credential.applyToRequest(opts)
+    applyCredentialToRequest(this._credential, opts)
     return opts
   }
 
@@ -91,14 +94,14 @@ export class HttpClient {
    *
    * @internal
    */
-  setCredential(credential: Credential): void {
+  setCredential(credential: ClusterCredential): void {
     this._credential = credential
   }
 
   /**
    * @internal
    */
-  get credential(): Credential {
+  get credential(): ClusterCredential {
     return this._credential
   }
 
@@ -132,8 +135,8 @@ export class HttpClient {
     const tlsOptions: tls.ConnectionOptions = {}
 
     // Override the servername to use the hostname rather than the DNS record.
-    // SNI is only valid for DNS names (RFC 6066), so skip when connecting via IP.
-    if (net.isIP(this._hostname) === 0) {
+    // RFC 6066 forbids IP literals in SNI; skip when the host is an IP.
+    if (isIP(this._hostname) === 0) {
       tlsOptions.servername = this._hostname
     }
 

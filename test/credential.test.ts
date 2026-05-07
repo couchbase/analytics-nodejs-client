@@ -18,21 +18,30 @@
 import { assert } from 'chai'
 import * as http from 'node:http'
 import { AddressInfo } from 'node:net'
-import { Credential, createInstance } from '../lib/analytics.js'
+import {
+  Credential,
+  JwtCredential,
+  createInstance,
+  type ClusterCredential,
+} from '../lib/analytics.js'
 import { InvalidArgumentError } from '../lib/errors.js'
 
 const SAMPLE_JWT = 'header.payload.signature'
 
-function authHeaderOf(cred: Credential): string | undefined {
-  const opts: http.RequestOptions = {}
-  cred.applyToRequest(opts)
-  return (opts.headers as Record<string, string> | undefined)?.Authorization
+function authHeaderOf(cred: ClusterCredential): string | undefined {
+  const cluster = createInstance('http://localhost:8095', cred)
+  try {
+    const opts = cluster.httpClient.genericRequestOptions()
+    return (opts.headers as Record<string, string> | undefined)?.Authorization
+  } finally {
+    cluster.close()
+  }
 }
 
 describe('#Credential', function () {
   describe('Password', function () {
-    it('of builds a Basic header', function () {
-      const cred = Credential.of('Administrator', 'password')
+    it('constructor builds a Basic header', function () {
+      const cred = new Credential('Administrator', 'password')
       assert.strictEqual(cred.username, 'Administrator')
       assert.strictEqual(cred.password, 'password')
       assert.strictEqual(
@@ -41,17 +50,37 @@ describe('#Credential', function () {
       )
     })
 
-    it('constructor is equivalent to of (backwards compatibility)', function () {
-      const a = Credential.of('Administrator', 'password')
-      const b = new Credential('Administrator', 'password')
-      assert.strictEqual(authHeaderOf(a), authHeaderOf(b))
-      assert.strictEqual(b.username, 'Administrator')
-      assert.strictEqual(b.password, 'password')
+    it('supports validated username/password mutation after construction', function () {
+      const cred = new Credential('Administrator', 'password')
+
+      cred.username = 'alice'
+      cred.password = 'changed'
+
+      assert.strictEqual(
+        authHeaderOf(cred),
+        'Basic ' + Buffer.from('alice:changed').toString('base64')
+      )
+    })
+
+    it('rejects invalid username/password mutation', function () {
+      const cred = new Credential('alice', 'pw')
+
+      assert.throws(() => {
+        cred.username = 'alice:bob'
+      }, InvalidArgumentError)
+      assert.throws(() => {
+        const mutableCred = cred as unknown as { password: string }
+        mutableCred.password = undefined as unknown as string
+      }, InvalidArgumentError)
+      assert.strictEqual(
+        authHeaderOf(cred),
+        'Basic ' + Buffer.from('alice:pw').toString('base64')
+      )
     })
 
     it('rejects a username containing the Basic-auth separator', function () {
       assert.throws(
-        () => Credential.of('alice:bob', 'pw'),
+        () => new Credential('alice:bob', 'pw'),
         InvalidArgumentError
       )
     })
@@ -59,7 +88,7 @@ describe('#Credential', function () {
     it('rejects undefined username/password (no silent broken credential)', function () {
       assert.throws(
         () =>
-          Credential.of(
+          new Credential(
             undefined as unknown as string,
             undefined as unknown as string
           ),
@@ -69,41 +98,36 @@ describe('#Credential', function () {
   })
 
   describe('JWT', function () {
-    it('ofJwt builds a Bearer header', function () {
-      const cred = Credential.ofJwt(SAMPLE_JWT)
-      assert.strictEqual(cred.username, '')
-      assert.strictEqual(cred.password, '')
+    it('constructor builds a Bearer header', function () {
+      const cred = new JwtCredential(SAMPLE_JWT)
       assert.strictEqual(authHeaderOf(cred), `Bearer ${SAMPLE_JWT}`)
     })
 
     it('trims surrounding whitespace from the token', function () {
-      const cred = Credential.ofJwt(`  ${SAMPLE_JWT}\n`)
+      const cred = new JwtCredential(`  ${SAMPLE_JWT}\n`)
       assert.strictEqual(authHeaderOf(cred), `Bearer ${SAMPLE_JWT}`)
     })
 
     it('rejects an empty token', function () {
-      assert.throws(() => Credential.ofJwt(''), InvalidArgumentError)
+      assert.throws(() => new JwtCredential(''), InvalidArgumentError)
     })
 
     it('rejects a non-string token', function () {
       assert.throws(
-        () => Credential.ofJwt(1234 as unknown as string),
+        () => new JwtCredential(1234 as unknown as string),
         InvalidArgumentError
       )
     })
 
     it('rejects a token containing CRLF (header-injection guard)', function () {
       assert.throws(
-        () => Credential.ofJwt('abc.def\r\nX-Evil: y'),
+        () => new JwtCredential('abc.def\r\nX-Evil: y'),
         InvalidArgumentError
       )
     })
 
     it('rejects a token containing a NUL byte', function () {
-      assert.throws(
-        () => Credential.ofJwt('abc\x00def'),
-        InvalidArgumentError
-      )
+      assert.throws(() => new JwtCredential('abc\x00def'), InvalidArgumentError)
     })
   })
 
@@ -113,7 +137,7 @@ describe('#Credential', function () {
         () =>
           createInstance(
             'http://localhost:8095',
-            null as unknown as Credential
+            null as unknown as ClusterCredential
           ),
         InvalidArgumentError
       )
@@ -121,8 +145,19 @@ describe('#Credential', function () {
         () =>
           createInstance(
             'http://localhost:8095',
-            undefined as unknown as Credential
+            undefined as unknown as ClusterCredential
           ),
+        InvalidArgumentError
+      )
+    })
+
+    it('rejects a username/password credential object', function () {
+      assert.throws(
+        () =>
+          createInstance('http://localhost:8095', {
+            username: 'alice',
+            password: 'pw',
+          } as unknown as ClusterCredential),
         InvalidArgumentError
       )
     })
@@ -130,11 +165,11 @@ describe('#Credential', function () {
     it('rotates a JWT in place', function () {
       const cluster = createInstance(
         'http://localhost:8095',
-        Credential.ofJwt(SAMPLE_JWT)
+        new JwtCredential(SAMPLE_JWT)
       )
       try {
         const next = 'rotated.jwt.token'
-        cluster.setCredential(Credential.ofJwt(next))
+        cluster.setCredential(new JwtCredential(next))
         const req = cluster.httpClient.genericRequestOptions()
         assert.strictEqual(
           (req.headers as Record<string, string>).Authorization,
@@ -148,10 +183,10 @@ describe('#Credential', function () {
     it('rotates a password in place', function () {
       const cluster = createInstance(
         'http://localhost:8095',
-        Credential.of('alice', 'old')
+        new Credential('alice', 'old')
       )
       try {
-        cluster.setCredential(Credential.of('alice', 'new'))
+        cluster.setCredential(new Credential('alice', 'new'))
         const req = cluster.httpClient.genericRequestOptions()
         assert.strictEqual(
           (req.headers as Record<string, string>).Authorization,
@@ -162,14 +197,37 @@ describe('#Credential', function () {
       }
     })
 
+    it('rejects invalid credential-shaped objects without mutating state', function () {
+      const cluster = createInstance(
+        'http://localhost:8095',
+        new Credential('alice', 'pw')
+      )
+      try {
+        const before = cluster.httpClient.genericRequestOptions()
+          .headers as Record<string, string>
+        assert.throws(
+          () =>
+            cluster.setCredential({
+              credentialType: 'password',
+            } as unknown as ClusterCredential),
+          InvalidArgumentError
+        )
+        const after = cluster.httpClient.genericRequestOptions()
+          .headers as Record<string, string>
+        assert.strictEqual(after.Authorization, before.Authorization)
+      } finally {
+        cluster.close()
+      }
+    })
+
     it('rejects switching credential type at runtime', function () {
       const cluster = createInstance(
         'http://localhost:8095',
-        Credential.of('alice', 'pw')
+        new Credential('alice', 'pw')
       )
       try {
         assert.throws(
-          () => cluster.setCredential(Credential.ofJwt(SAMPLE_JWT)),
+          () => cluster.setCredential(new JwtCredential(SAMPLE_JWT)),
           InvalidArgumentError
         )
       } finally {
@@ -180,15 +238,16 @@ describe('#Credential', function () {
     it('rejects a null/undefined credential', function () {
       const cluster = createInstance(
         'http://localhost:8095',
-        Credential.of('alice', 'pw')
+        new Credential('alice', 'pw')
       )
       try {
         assert.throws(
-          () => cluster.setCredential(null as unknown as Credential),
+          () => cluster.setCredential(null as unknown as ClusterCredential),
           InvalidArgumentError
         )
         assert.throws(
-          () => cluster.setCredential(undefined as unknown as Credential),
+          () =>
+            cluster.setCredential(undefined as unknown as ClusterCredential),
           InvalidArgumentError
         )
       } finally {
@@ -212,7 +271,7 @@ describe('#Credential', function () {
 
       const cluster = createInstance(
         `http://127.0.0.1:${port}`,
-        Credential.ofJwt(SAMPLE_JWT)
+        new JwtCredential(SAMPLE_JWT)
       )
       try {
         await cluster
@@ -230,8 +289,12 @@ describe('#Credential', function () {
     it('credential rotation between retries takes effect on the next retry', async function () {
       this.timeout(10000)
       const seenAuth: string[] = []
+      let cluster: ReturnType<typeof createInstance> | undefined
       const server = http.createServer((req) => {
         seenAuth.push(req.headers.authorization || '')
+        if (seenAuth.length === 1) {
+          cluster?.setCredential(new JwtCredential('second.jwt.token'))
+        }
         req.socket.destroy()
       })
       await new Promise<void>((resolve) =>
@@ -239,19 +302,15 @@ describe('#Credential', function () {
       )
       const port = (server.address() as AddressInfo).port
 
-      const cluster = createInstance(
+      cluster = createInstance(
         `http://127.0.0.1:${port}`,
-        Credential.ofJwt('first.jwt.token')
+        new JwtCredential('first.jwt.token')
       )
       try {
         const queryPromise = cluster.executeQuery('SELECT 1', {
           maxRetries: 3,
           timeout: 4000,
         })
-        setTimeout(
-          () => cluster.setCredential(Credential.ofJwt('second.jwt.token')),
-          50
-        )
         await queryPromise.catch(() => undefined)
 
         assert.isAtLeast(seenAuth.length, 2)
@@ -271,13 +330,13 @@ describe('#Credential', function () {
     it('does not mutate state when rotation is rejected', function () {
       const cluster = createInstance(
         'http://localhost:8095',
-        Credential.of('alice', 'pw')
+        new Credential('alice', 'pw')
       )
       try {
         const before = cluster.httpClient.genericRequestOptions()
           .headers as Record<string, string>
         try {
-          cluster.setCredential(Credential.ofJwt(SAMPLE_JWT))
+          cluster.setCredential(new JwtCredential(SAMPLE_JWT))
         } catch {
           // expected
         }
