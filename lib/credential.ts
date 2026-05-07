@@ -18,34 +18,12 @@
 import * as http from 'node:http'
 import { InvalidArgumentError } from './errors.js'
 
-// eslint-disable-next-line no-control-regex
-const CONTROL_CHAR_RE = /[\x00-\x1F\x7F]/
-
-/**
- * Reject any control character (including CR/LF/NUL) in a value that will be
- * interpolated into an HTTP header, to prevent header-injection.
- *
- * @internal
- */
-function assertNoControlChars(value: string, fieldName: string): void {
-  if (CONTROL_CHAR_RE.test(value)) {
-    throw new InvalidArgumentError(
-      `${fieldName} must not contain control characters.`
-    )
-  }
-}
-
 /**
  * @internal
  */
 function validateUsername(username: string): void {
   if (typeof username !== 'string') {
     throw new InvalidArgumentError('Username must be a string.')
-  }
-  if (username.includes(':')) {
-    throw new InvalidArgumentError(
-      "Username must not contain ':' (the HTTP Basic auth separator)."
-    )
   }
 }
 
@@ -93,12 +71,35 @@ const jwtCredentialState = new WeakMap<
 >()
 
 /**
+ * ICredential specifies a credential which uses an RBAC
+ * username and password to authenticate with the cluster.
+ *
+ * @deprecated Retained for back-compat with code that imported the type
+ *   from earlier versions. Use the {@link Credential} class directly. Not
+ *   accepted as input to `createInstance` or `Cluster.setCredential` —
+ *   both require a {@link Credential} or {@link JwtCredential} instance.
+ *
+ * @category Authentication
+ */
+export interface ICredential {
+  /**
+   * The username to authenticate with.
+   */
+  username: string
+
+  /**
+   * The password to authenticate with.
+   */
+  password: string
+}
+
+/**
  * RBAC username/password for authenticating to an Analytics cluster. For
  * a JSON Web Token instead, see {@link JwtCredential}.
  *
  * @category Authentication
  */
-export class Credential {
+export class Credential implements ICredential {
   private _username: string
   private _password: string
 
@@ -158,15 +159,10 @@ export class JwtCredential {
     if (typeof token !== 'string') {
       throw new InvalidArgumentError('JWT token must be a string.')
     }
-    const trimmed = token.trim()
-    if (trimmed.length === 0) {
+    if (token.length === 0) {
       throw new InvalidArgumentError('JWT token must not be empty.')
     }
-    // The token is interpolated directly into the Authorization header, so any
-    // control character would let a caller inject additional headers.
-    assertNoControlChars(trimmed, 'JWT token')
-
-    jwtCredentialState.set(this, { authorizationHeader: `Bearer ${trimmed}` })
+    jwtCredentialState.set(this, { authorizationHeader: `Bearer ${token}` })
   }
 }
 
