@@ -207,17 +207,7 @@ export class Cluster {
     if (!options) {
       options = {}
     }
-    if (credential == null) {
-      throw new InvalidArgumentError('credential must not be null/undefined.')
-    }
-    if (
-      !(credential instanceof Credential) &&
-      !(credential instanceof JwtCredential)
-    ) {
-      throw new InvalidArgumentError(
-        'credential must be a Credential or JwtCredential.'
-      )
-    }
+    this._validateCredential(credential)
 
     if (!options.logger) {
       const envLogLevel = (
@@ -384,6 +374,22 @@ export class Cluster {
    *   different kind than the current credential.
    */
   setCredential(credential: ClusterCredential): void {
+    this._validateCredential(credential)
+    this._httpClient.setCredential(credential)
+  }
+
+  /**
+   * Shuts down this cluster object.  Cleaning up all resources associated with it.
+   *
+   */
+  close(): void {
+    this._httpClient.close()
+  }
+
+  /**
+   * @internal
+   */
+  private _validateCredential(credential: ClusterCredential): void {
     if (credential == null) {
       throw new InvalidArgumentError('credential must not be null/undefined.')
     }
@@ -395,21 +401,6 @@ export class Cluster {
         'credential must be a Credential or JwtCredential.'
       )
     }
-    const currentType = this._httpClient.credential.type
-    if (credential.type !== currentType) {
-      throw new InvalidArgumentError(
-        `Cannot switch credential type at runtime; current is '${currentType}', new is '${credential.type}'.`
-      )
-    }
-    this._httpClient.setCredential(credential)
-  }
-
-  /**
-   * Shuts down this cluster object.  Cleaning up all resources associated with it.
-   *
-   */
-  close(): void {
-    this._httpClient.close()
   }
 
   /**

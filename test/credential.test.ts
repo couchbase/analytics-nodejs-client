@@ -148,7 +148,7 @@ describe('#Credential', function () {
         assert.throws(
           () =>
             cluster.setCredential({
-              credentialType: 'password',
+              type: 'password',
             } as unknown as ClusterCredential),
           InvalidArgumentError
         )

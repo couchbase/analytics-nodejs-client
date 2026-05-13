@@ -18,7 +18,7 @@
 import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
 import { isIP } from 'node:net'
-import { AnalyticsError } from './errors.js'
+import { AnalyticsError, InvalidArgumentError } from './errors.js'
 import type { ClusterCredential } from './credential.js'
 import { SecurityOptions } from './cluster.js'
 import { Certificates } from './certificates.js'
@@ -70,9 +70,8 @@ export class HttpClient {
   }
 
   /**
-   * Base request options with the current credential's auth applied. Read
-   * each time so a credential rotated via {@link setCredential} takes effect
-   * on the next call.
+   * Returns request options with the current credential's `Authorization`
+   * header set.
    *
    * @internal
    */
@@ -86,19 +85,18 @@ export class HttpClient {
   }
 
   /**
-   * Replace the credential used for subsequent requests.
+   * Replace the credential used for subsequent requests. Cross-type
+   * rotation throws `InvalidArgumentError`.
    *
    * @internal
    */
   setCredential(credential: ClusterCredential): void {
+    if (credential.type !== this._credential.type) {
+      throw new InvalidArgumentError(
+        `Cannot switch credential type at runtime; current is '${this._credential.type}', new is '${credential.type}'.`
+      )
+    }
     this._credential = credential
-  }
-
-  /**
-   * @internal
-   */
-  get credential(): ClusterCredential {
-    return this._credential
   }
 
   /**
