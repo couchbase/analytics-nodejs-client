@@ -15,7 +15,11 @@
  *  limitations under the License.
  */
 
-import { Credential } from './credential.js'
+import {
+  type ClusterCredential,
+  Credential,
+  JwtCredential,
+} from './credential.js'
 import { Database } from './database.js'
 import { Deserializer, JsonDeserializer } from './deserializers.js'
 import {
@@ -147,7 +151,6 @@ export class Cluster {
   private _connectTimeout: number
   private _handleRequestTimeout: number
   private _httpClient: HttpClient
-  private _credential: Credential
   private _maxRetries: number
   private _deserializer: Deserializer
 
@@ -198,12 +201,13 @@ export class Cluster {
      */
   private constructor(
     httpEndpoint: string,
-    credential: Credential,
+    credential: ClusterCredential,
     options?: ClusterOptions
   ) {
     if (!options) {
       options = {}
     }
+    this._validateCredential(credential)
 
     if (!options.logger) {
       const envLogLevel = (
@@ -264,7 +268,6 @@ export class Cluster {
 
     this._validateSecurityOptions(options.securityOptions)
 
-    this._credential = credential
     this._queryTimeout = options.timeoutOptions.queryTimeout || 600_000
     this._connectTimeout = options.timeoutOptions.connectTimeout || 10_000
     this._handleRequestTimeout =
@@ -273,7 +276,7 @@ export class Cluster {
     this._maxRetries = options.maxRetries || 7
     this._httpClient = new HttpClient(
       url,
-      this._credential,
+      credential,
       options.securityOptions
     )
   }
@@ -287,7 +290,7 @@ export class Cluster {
    */
   static createInstance(
     httpEndpoint: string,
-    credential: Credential,
+    credential: ClusterCredential,
     options?: ClusterOptions
   ): Cluster {
     return new Cluster(httpEndpoint, credential, options)
@@ -360,12 +363,44 @@ export class Cluster {
     const response = await exec.startQuery(statement, options)
     return new QueryHandle(exec, response)
   }
+
+  /**
+   * Replace the credential used for subsequent HTTP requests, for example to
+   * refresh a JWT before it expires. The new credential must be the same
+   * kind as the current one and takes effect on the next request.
+   *
+   * @param credential The new credential to use.
+   * @throws {InvalidArgumentError} If `credential` is null/undefined or is a
+   *   different kind than the current credential.
+   */
+  setCredential(credential: ClusterCredential): void {
+    this._validateCredential(credential)
+    this._httpClient.setCredential(credential)
+  }
+
   /**
    * Shuts down this cluster object.  Cleaning up all resources associated with it.
    *
    */
   close(): void {
     this._httpClient.close()
+  }
+
+  /**
+   * @internal
+   */
+  private _validateCredential(credential: ClusterCredential): void {
+    if (credential == null) {
+      throw new InvalidArgumentError('credential must not be null/undefined.')
+    }
+    if (
+      !(credential instanceof Credential) &&
+      !(credential instanceof JwtCredential)
+    ) {
+      throw new InvalidArgumentError(
+        'credential must be a Credential or JwtCredential.'
+      )
+    }
   }
 
   /**

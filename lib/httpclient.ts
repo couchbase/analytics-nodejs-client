@@ -17,8 +17,9 @@
 
 import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
-import { AnalyticsError } from './errors.js'
-import { Credential } from './credential.js'
+import { isIP } from 'node:net'
+import { AnalyticsError, InvalidArgumentError } from './errors.js'
+import type { ClusterCredential } from './credential.js'
 import { SecurityOptions } from './cluster.js'
 import { Certificates } from './certificates.js'
 import * as tls from 'node:tls'
@@ -33,40 +34,32 @@ import * as dns from 'node:dns'
 export class HttpClient {
   private _agent: HttpAgent | HttpsAgent
   private _module: typeof http | typeof https
-  private _auth: string
+  private _credential: ClusterCredential
   private _hostname: string
   private _port: string
 
   constructor(
     url: URL,
-    credential: Credential,
+    credential: ClusterCredential,
     securityOptions: SecurityOptions
   ) {
     this._hostname = url.hostname
-    this._auth = `${credential.username}:${credential.password}`
+    this._credential = credential
     this.randomLookup = this.randomLookup.bind(this)
 
     if (url.protocol === 'http:') {
       this._port = url.port ?? '80'
-      this._agent = new HttpAgent({
-        keepAlive: true,
-        lookup: this.randomLookup,
-      })
       this._module = http
     } else if (url.protocol === 'https:') {
       this._port = url.port ?? '443'
-      const tlsOptions = this._buildTlsOptions(securityOptions)
-      this._agent = new HttpsAgent({
-        keepAlive: true,
-        lookup: this.randomLookup,
-        ...tlsOptions,
-      })
       this._module = https
     } else {
       throw new AnalyticsError(
         'Unsupported protocol provided in connection string'
       )
     }
+
+    this._agent = this._buildAgent(securityOptions)
   }
 
   /**
@@ -77,6 +70,9 @@ export class HttpClient {
   }
 
   /**
+   * Returns request options with the current credential's `Authorization`
+   * header set.
+   *
    * @internal
    */
   genericRequestOptions(): http.RequestOptions {
@@ -84,8 +80,23 @@ export class HttpClient {
       agent: this._agent,
       hostname: this._hostname,
       port: this._port,
-      auth: this._auth,
+      headers: { Authorization: this._credential.authorizationHeader },
     }
+  }
+
+  /**
+   * Replace the credential used for subsequent requests. Cross-type
+   * rotation throws `InvalidArgumentError`.
+   *
+   * @internal
+   */
+  setCredential(credential: ClusterCredential): void {
+    if (credential.type !== this._credential.type) {
+      throw new InvalidArgumentError(
+        `Cannot switch credential type at runtime; current is '${this._credential.type}', new is '${credential.type}'.`
+      )
+    }
+    this._credential = credential
   }
 
   /**
@@ -97,13 +108,31 @@ export class HttpClient {
     }
   }
 
+  private _buildAgent(securityOptions: SecurityOptions): HttpAgent | HttpsAgent {
+    if (this._module === http) {
+      return new HttpAgent({
+        keepAlive: true,
+        lookup: this.randomLookup,
+      })
+    }
+    const tlsOptions = this._buildTlsOptions(securityOptions)
+    return new HttpsAgent({
+      keepAlive: true,
+      lookup: this.randomLookup,
+      ...tlsOptions,
+    })
+  }
+
   private _buildTlsOptions(
     securityOptions: SecurityOptions
   ): tls.ConnectionOptions {
     const tlsOptions: tls.ConnectionOptions = {}
 
-    // Override the servername to use the hostname rather than the DNS record
-    tlsOptions.servername = this._hostname
+    // Override the servername to use the hostname rather than the DNS record.
+    // RFC 6066 forbids IP literals in SNI; skip when the host is an IP.
+    if (isIP(this._hostname) === 0) {
+      tlsOptions.servername = this._hostname
+    }
 
     tlsOptions.minVersion = 'TLSv1.3'
 

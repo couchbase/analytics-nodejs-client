@@ -236,6 +236,8 @@ class Harness {
       this._integrationEnabled = false
       // Set to localhost to allow unit tests to run
       this._connstr = 'http://localhost'
+      this._user = this._user || 'placeholder'
+      this._pass = this._pass || 'placeholder'
     }
 
     this._testKey = crypto.randomUUID()
@@ -271,7 +273,7 @@ class Harness {
   }
 
   get credentials(): Credential {
-    return new Credential(this._user, this._pass)
+    return new Credential(this._user as string, this._pass as string)
   }
 
   get nonprod(): boolean {
@@ -352,7 +354,7 @@ class Harness {
     const username = options.username || this._user
     const password = options.password || this._pass
 
-    const credential = new Credential(username, password)
+    const credential = new Credential(username as string, password as string)
 
     if (!options.connstr) {
       options.connstr = this._connstr

@@ -122,18 +122,23 @@ export class QueryExecutor {
     const encodedOptions = this._buildQueryRequest(statement, options)
     const body = JSON.stringify(encodedOptions)
 
-    const requestOptions: http.RequestOptions = {
-      ...this._cluster.httpClient.genericRequestOptions(),
-      method: 'POST',
-      path: '/api/v1/request',
-      headers: {
-        'Content-Length': Buffer.byteLength(body),
-        'Content-Type': 'application/json',
-      },
-    }
-
     return await runWithRetry(
-      () => this._attemptQuery(requestOptions, body, deadline),
+      () => {
+        // Rebuild per attempt so a credential rotated mid-query takes effect
+        // on the next retry.
+        const generic = this._cluster.httpClient.genericRequestOptions()
+        const requestOptions: http.RequestOptions = {
+          ...generic,
+          method: 'POST',
+          path: '/api/v1/request',
+          headers: {
+            ...generic.headers,
+            'Content-Length': Buffer.byteLength(body),
+            'Content-Type': 'application/json',
+          },
+        }
+        return this._attemptQuery(requestOptions, body, deadline)
+      },
       (errs) => ErrorHandler.handleErrors(errs, this._requestContext),
       deadline,
       this._requestContext
