@@ -19,6 +19,7 @@ import { assert } from 'chai'
 import * as http from 'node:http'
 import { AddressInfo } from 'node:net'
 import {
+  CertificateCredential,
   Credential,
   JwtCredential,
   createInstance,
@@ -27,6 +28,9 @@ import {
 import { InvalidArgumentError } from '../lib/errors.js'
 
 const SAMPLE_JWT = 'header.payload.signature'
+
+const DUMMY_PFX = Buffer.from('dummy-pkcs12-bytes')
+const DUMMY_PASSPHRASE = 'test'
 
 describe('#Credential', function () {
   describe('Password', function () {
@@ -65,6 +69,118 @@ describe('#Credential', function () {
     it('rejects a non-string token', function () {
       assert.throws(
         () => new JwtCredential(1234 as unknown as string),
+        InvalidArgumentError
+      )
+    })
+
+  })
+
+  describe('Certificate (mTLS)', function () {
+    it('constructor accepts a PKCS#12 Buffer', function () {
+      const cred = new CertificateCredential({
+        pfx: DUMMY_PFX,
+        passphrase: DUMMY_PASSPHRASE,
+      })
+      assert.strictEqual(cred.type, 'certificate')
+      assert.strictEqual(cred.pfx, DUMMY_PFX)
+      assert.strictEqual(cred.passphrase, DUMMY_PASSPHRASE)
+      assert.isUndefined(cred.cert)
+      assert.isUndefined(cred.key)
+    })
+
+    it('constructor accepts PEM cert and key', function () {
+      const cert = 'CERT-PEM'
+      const key = 'KEY-PEM'
+      const cred = new CertificateCredential({ cert, key })
+      assert.strictEqual(cred.type, 'certificate')
+      assert.strictEqual(cred.cert, cert)
+      assert.strictEqual(cred.key, key)
+      assert.isUndefined(cred.pfx)
+    })
+
+    it('rejects supplying both pfx and cert+key', function () {
+      assert.throws(
+        () =>
+          new CertificateCredential({
+            pfx: DUMMY_PFX,
+            cert: 'C',
+            key: 'K',
+          }),
+        InvalidArgumentError
+      )
+    })
+
+    it('rejects supplying neither pfx nor cert+key', function () {
+      assert.throws(() => new CertificateCredential({}), InvalidArgumentError)
+    })
+
+    it('rejects cert without key', function () {
+      assert.throws(
+        () => new CertificateCredential({ cert: 'C' }),
+        InvalidArgumentError
+      )
+    })
+
+    it('rejects key without cert', function () {
+      assert.throws(
+        () => new CertificateCredential({ key: 'K' }),
+        InvalidArgumentError
+      )
+    })
+
+    it('rejects pfx alongside cert', function () {
+      assert.throws(
+        () => new CertificateCredential({ pfx: DUMMY_PFX, cert: 'C' }),
+        InvalidArgumentError
+      )
+    })
+
+    it('rejects pfx alongside key', function () {
+      assert.throws(
+        () => new CertificateCredential({ pfx: DUMMY_PFX, key: 'K' }),
+        InvalidArgumentError
+      )
+    })
+
+    it('rejects a non-Buffer pfx', function () {
+      assert.throws(
+        () =>
+          new CertificateCredential({
+            pfx: 'not a buffer' as unknown as Buffer,
+          }),
+        InvalidArgumentError
+      )
+    })
+
+    it('rejects a non-string/non-Buffer cert', function () {
+      assert.throws(
+        () =>
+          new CertificateCredential({
+            cert: 42 as unknown as string,
+            key: 'K',
+          }),
+        InvalidArgumentError
+      )
+    })
+
+    it('rejects a non-string/non-Buffer key', function () {
+      assert.throws(
+        () =>
+          new CertificateCredential({
+            cert: 'C',
+            key: {} as unknown as string,
+          }),
+        InvalidArgumentError
+      )
+    })
+
+    it('rejects a non-string passphrase', function () {
+      assert.throws(
+        () =>
+          new CertificateCredential({
+            pfx: DUMMY_PFX,
+            passphrase: 42 as unknown as string,
+          }),
         InvalidArgumentError
       )
     })
@@ -170,6 +286,61 @@ describe('#Credential', function () {
           () => cluster.setCredential(new JwtCredential(SAMPLE_JWT)),
           InvalidArgumentError
         )
+      } finally {
+        cluster.close()
+      }
+    })
+
+    it('rejects mTLS over http://', function () {
+      assert.throws(
+        () =>
+          createInstance(
+            'http://localhost:8095',
+            new CertificateCredential({
+              pfx: DUMMY_PFX,
+              passphrase: DUMMY_PASSPHRASE,
+            })
+          ),
+        InvalidArgumentError
+      )
+    })
+
+    it('rotates a certificate by rebuilding the agent', function () {
+      const cluster = createInstance(
+        'https://localhost:18095',
+        new CertificateCredential({
+          pfx: DUMMY_PFX,
+          passphrase: DUMMY_PASSPHRASE,
+        }),
+        { securityOptions: { disableServerCertificateVerification: true } }
+      )
+      try {
+        const before = cluster.httpClient.genericRequestOptions().agent
+        cluster.setCredential(
+          new CertificateCredential({
+            pfx: DUMMY_PFX,
+            passphrase: DUMMY_PASSPHRASE,
+          })
+        )
+        const after = cluster.httpClient.genericRequestOptions().agent
+        assert.notStrictEqual(after, before)
+      } finally {
+        cluster.close()
+      }
+    })
+
+    it('certificate credentials do not set an Authorization header', function () {
+      const cluster = createInstance(
+        'https://localhost:18095',
+        new CertificateCredential({
+          pfx: DUMMY_PFX,
+          passphrase: DUMMY_PASSPHRASE,
+        }),
+        { securityOptions: { disableServerCertificateVerification: true } }
+      )
+      try {
+        const opts = cluster.httpClient.genericRequestOptions()
+        assert.isUndefined(opts.headers)
       } finally {
         cluster.close()
       }
