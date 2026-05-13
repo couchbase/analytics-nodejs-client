@@ -15,60 +15,7 @@
  *  limitations under the License.
  */
 
-import * as http from 'node:http'
 import { InvalidArgumentError } from './errors.js'
-
-/**
- * @internal
- */
-function validateUsername(username: string): void {
-  if (typeof username !== 'string') {
-    throw new InvalidArgumentError('Username must be a string.')
-  }
-}
-
-/**
- * @internal
- */
-function validatePassword(password: string): void {
-  if (typeof password !== 'string') {
-    throw new InvalidArgumentError('Password must be a string.')
-  }
-}
-
-/**
- * @internal
- */
-function buildBasicAuthorizationHeader(
-  username: string,
-  password: string
-): string {
-  return (
-    'Basic ' +
-    Buffer.from(`${username}:${password}`, 'utf8').toString('base64')
-  )
-}
-
-/**
- * Discriminates between password and JWT credentials.
- *
- * @internal
- */
-enum CredentialType {
-  /** Username and password authentication, sent as HTTP Basic. */
-  Password = 'password',
-  /** JSON Web Token authentication, sent as HTTP Bearer. */
-  Jwt = 'jwt',
-}
-
-const passwordCredentialState = new WeakMap<
-  Credential,
-  { authorizationHeader: string }
->()
-const jwtCredentialState = new WeakMap<
-  JwtCredential,
-  { authorizationHeader: string }
->()
 
 /**
  * ICredential specifies a credential which uses an RBAC
@@ -100,8 +47,17 @@ export interface ICredential {
  * @category Authentication
  */
 export class Credential implements ICredential {
-  private _username: string
-  private _password: string
+  /** The username to authenticate with. */
+  readonly username: string
+
+  /** The password to authenticate with. */
+  readonly password: string
+
+  /** @internal */
+  readonly type = 'password' as const
+
+  /** @internal */
+  readonly authorizationHeader: string
 
   /**
    * Constructs a {@link Credential} for an RBAC username and password. The
@@ -111,33 +67,17 @@ export class Credential implements ICredential {
    * @param password The password to authenticate with.
    */
   constructor(username: string, password: string) {
-    validateUsername(username)
-    validatePassword(password)
-    this._username = username
-    this._password = password
-    refreshPasswordCredentialState(this)
-  }
-
-  /** The username to authenticate with. */
-  get username(): string {
-    return this._username
-  }
-
-  set username(username: string) {
-    validateUsername(username)
-    this._username = username
-    refreshPasswordCredentialState(this)
-  }
-
-  /** The password to authenticate with. */
-  get password(): string {
-    return this._password
-  }
-
-  set password(password: string) {
-    validatePassword(password)
-    this._password = password
-    refreshPasswordCredentialState(this)
+    if (typeof username !== 'string') {
+      throw new InvalidArgumentError('Username must be a string.')
+    }
+    if (typeof password !== 'string') {
+      throw new InvalidArgumentError('Password must be a string.')
+    }
+    this.username = username
+    this.password = password
+    this.authorizationHeader =
+      'Basic ' +
+      Buffer.from(`${username}:${password}`, 'utf8').toString('base64')
   }
 }
 
@@ -147,7 +87,11 @@ export class Credential implements ICredential {
  * @category Authentication
  */
 export class JwtCredential {
-  private readonly _jwtCredentialBrand: undefined
+  /** @internal */
+  readonly type = 'jwt' as const
+
+  /** @internal */
+  readonly authorizationHeader: string
 
   /**
    * Constructs a {@link JwtCredential}. The SDK sends
@@ -162,7 +106,7 @@ export class JwtCredential {
     if (token.length === 0) {
       throw new InvalidArgumentError('JWT token must not be empty.')
     }
-    jwtCredentialState.set(this, { authorizationHeader: `Bearer ${token}` })
+    this.authorizationHeader = `Bearer ${token}`
   }
 }
 
@@ -172,67 +116,3 @@ export class JwtCredential {
  * @category Authentication
  */
 export type ClusterCredential = Credential | JwtCredential
-
-/**
- * @internal
- */
-function refreshPasswordCredentialState(credential: Credential): void {
-  passwordCredentialState.set(credential, {
-    authorizationHeader: buildBasicAuthorizationHeader(
-      credential.username,
-      credential.password
-    ),
-  })
-}
-
-/**
- * @internal
- */
-export function assertClusterCredential(
-  credential: unknown
-): asserts credential is ClusterCredential {
-  if (credential == null) {
-    throw new InvalidArgumentError('credential must not be null/undefined.')
-  }
-  if (!(credential instanceof Credential || credential instanceof JwtCredential)) {
-    throw new InvalidArgumentError(
-      'credential must be a Credential or JwtCredential.'
-    )
-  }
-}
-
-/**
- * @internal
- */
-export function getCredentialType(credential: ClusterCredential): CredentialType {
-  assertClusterCredential(credential)
-  if (credential instanceof Credential) {
-    return CredentialType.Password
-  }
-  return CredentialType.Jwt
-}
-
-/**
- * @internal
- */
-export function applyCredentialToRequest(
-  credential: ClusterCredential,
-  opts: http.RequestOptions
-): void {
-  assertClusterCredential(credential)
-  const headers = (opts.headers ??= {}) as Record<string, string>
-  if (credential instanceof Credential) {
-    const state = passwordCredentialState.get(credential)
-    if (!state) {
-      throw new InvalidArgumentError('credential must be a Credential.')
-    }
-    headers.Authorization = state.authorizationHeader
-    return
-  }
-
-  const state = jwtCredentialState.get(credential)
-  if (!state) {
-    throw new InvalidArgumentError('credential must be a JwtCredential.')
-  }
-  headers.Authorization = state.authorizationHeader
-}

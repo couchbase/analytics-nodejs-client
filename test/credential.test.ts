@@ -28,16 +28,6 @@ import { InvalidArgumentError } from '../lib/errors.js'
 
 const SAMPLE_JWT = 'header.payload.signature'
 
-function authHeaderOf(cred: ClusterCredential): string | undefined {
-  const cluster = createInstance('http://localhost:8095', cred)
-  try {
-    const opts = cluster.httpClient.genericRequestOptions()
-    return (opts.headers as Record<string, string> | undefined)?.Authorization
-  } finally {
-    cluster.close()
-  }
-}
-
 describe('#Credential', function () {
   describe('Password', function () {
     it('constructor builds a Basic header', function () {
@@ -45,33 +35,8 @@ describe('#Credential', function () {
       assert.strictEqual(cred.username, 'Administrator')
       assert.strictEqual(cred.password, 'password')
       assert.strictEqual(
-        authHeaderOf(cred),
+        cred.authorizationHeader,
         'Basic ' + Buffer.from('Administrator:password').toString('base64')
-      )
-    })
-
-    it('supports validated username/password mutation after construction', function () {
-      const cred = new Credential('Administrator', 'password')
-
-      cred.username = 'alice'
-      cred.password = 'changed'
-
-      assert.strictEqual(
-        authHeaderOf(cred),
-        'Basic ' + Buffer.from('alice:changed').toString('base64')
-      )
-    })
-
-    it('rejects invalid username/password mutation', function () {
-      const cred = new Credential('alice', 'pw')
-
-      assert.throws(() => {
-        const mutableCred = cred as unknown as { password: string }
-        mutableCred.password = undefined as unknown as string
-      }, InvalidArgumentError)
-      assert.strictEqual(
-        authHeaderOf(cred),
-        'Basic ' + Buffer.from('alice:pw').toString('base64')
       )
     })
 
@@ -90,7 +55,7 @@ describe('#Credential', function () {
   describe('JWT', function () {
     it('constructor builds a Bearer header', function () {
       const cred = new JwtCredential(SAMPLE_JWT)
-      assert.strictEqual(authHeaderOf(cred), `Bearer ${SAMPLE_JWT}`)
+      assert.strictEqual(cred.authorizationHeader, `Bearer ${SAMPLE_JWT}`)
     })
 
     it('rejects an empty token', function () {

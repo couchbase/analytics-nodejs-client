@@ -19,10 +19,7 @@ import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
 import { isIP } from 'node:net'
 import { AnalyticsError } from './errors.js'
-import {
-  applyCredentialToRequest,
-  type ClusterCredential,
-} from './credential.js'
+import type { ClusterCredential } from './credential.js'
 import { SecurityOptions } from './cluster.js'
 import { Certificates } from './certificates.js'
 import * as tls from 'node:tls'
@@ -80,13 +77,12 @@ export class HttpClient {
    * @internal
    */
   genericRequestOptions(): http.RequestOptions {
-    const opts: http.RequestOptions = {
+    return {
       agent: this._agent,
       hostname: this._hostname,
       port: this._port,
+      headers: { Authorization: this._credential.authorizationHeader },
     }
-    applyCredentialToRequest(this._credential, opts)
-    return opts
   }
 
   /**

@@ -16,9 +16,9 @@
  */
 
 import {
-  assertClusterCredential,
-  getCredentialType,
   type ClusterCredential,
+  Credential,
+  JwtCredential,
 } from './credential.js'
 import { Database } from './database.js'
 import { Deserializer, JsonDeserializer } from './deserializers.js'
@@ -207,7 +207,17 @@ export class Cluster {
     if (!options) {
       options = {}
     }
-    assertClusterCredential(credential)
+    if (credential == null) {
+      throw new InvalidArgumentError('credential must not be null/undefined.')
+    }
+    if (
+      !(credential instanceof Credential) &&
+      !(credential instanceof JwtCredential)
+    ) {
+      throw new InvalidArgumentError(
+        'credential must be a Credential or JwtCredential.'
+      )
+    }
 
     if (!options.logger) {
       const envLogLevel = (
@@ -374,12 +384,21 @@ export class Cluster {
    *   different kind than the current credential.
    */
   setCredential(credential: ClusterCredential): void {
-    assertClusterCredential(credential)
-    const currentCredentialType = getCredentialType(this._httpClient.credential)
-    const newCredentialType = getCredentialType(credential)
-    if (newCredentialType !== currentCredentialType) {
+    if (credential == null) {
+      throw new InvalidArgumentError('credential must not be null/undefined.')
+    }
+    if (
+      !(credential instanceof Credential) &&
+      !(credential instanceof JwtCredential)
+    ) {
       throw new InvalidArgumentError(
-        `Cannot switch credential type at runtime; current is '${currentCredentialType}', new is '${newCredentialType}'.`
+        'credential must be a Credential or JwtCredential.'
+      )
+    }
+    const currentType = this._httpClient.credential.type
+    if (credential.type !== currentType) {
+      throw new InvalidArgumentError(
+        `Cannot switch credential type at runtime; current is '${currentType}', new is '${credential.type}'.`
       )
     }
     this._httpClient.setCredential(credential)
