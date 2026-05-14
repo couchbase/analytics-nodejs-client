@@ -111,8 +111,113 @@ export class JwtCredential {
 }
 
 /**
+ * Material to construct a {@link CertificateCredential}. Provide either
+ * `pfx` (PKCS#12 Buffer), or both `cert` and `key` (PEM strings or Buffers).
+ *
+ * @category Authentication
+ */
+export interface CertificateCredentialOptions {
+  /** PKCS#12 keystore bytes (mutually exclusive with cert/key). */
+  pfx?: Buffer
+  /** PEM-encoded certificate (paired with `key`). */
+  cert?: string | Buffer
+  /** PEM-encoded private key (paired with `cert`). */
+  key?: string | Buffer
+  /** Passphrase for the keystore or encrypted private key, if any. */
+  passphrase?: string
+}
+
+/**
+ * A client certificate (mTLS) for authenticating to an Analytics cluster.
+ * The certificate is presented during the TLS handshake; no
+ * `Authorization` header is sent. Requires an `https://` endpoint.
+ *
+ * To load from disk, read the file(s) yourself and pass the bytes.
+ *
+ * ```ts
+ * // PKCS#12 keystore
+ * import * as fs from 'node:fs'
+ * new CertificateCredential({
+ *   pfx: fs.readFileSync('/path/to/client.p12'),
+ *   passphrase: 'keystore-pass',
+ * })
+ *
+ * // PEM certificate + private key
+ * new CertificateCredential({
+ *   cert: fs.readFileSync('/path/to/client.pem'),
+ *   key: fs.readFileSync('/path/to/client.key'),
+ * })
+ * ```
+ *
+ * @category Authentication
+ */
+export class CertificateCredential {
+  /** @internal */
+  readonly type = 'certificate' as const
+
+  /** @internal */
+  readonly pfx?: Buffer
+  /** @internal */
+  readonly cert?: string | Buffer
+  /** @internal */
+  readonly key?: string | Buffer
+  /** @internal */
+  readonly passphrase?: string
+
+  /**
+   * Constructs a {@link CertificateCredential}. Provide either `pfx`
+   * (PKCS#12) or both `cert` and `key` (PEM); supplying both forms, or
+   * neither, throws.
+   *
+   * @param options Certificate material.
+   */
+  constructor(options: CertificateCredentialOptions) {
+    const hasPfx = options.pfx !== undefined
+    const hasCert = options.cert !== undefined
+    const hasKey = options.key !== undefined
+    if (hasPfx && (hasCert || hasKey)) {
+      throw new InvalidArgumentError(
+        'Provide either `pfx` or `cert`+`key`, not both.'
+      )
+    }
+    if (!hasPfx && !(hasCert && hasKey)) {
+      throw new InvalidArgumentError(
+        'Provide either `pfx` or both `cert` and `key`.'
+      )
+    }
+    if (hasPfx && !Buffer.isBuffer(options.pfx)) {
+      throw new InvalidArgumentError('`pfx` must be a Buffer.')
+    }
+    if (
+      hasCert &&
+      typeof options.cert !== 'string' &&
+      !Buffer.isBuffer(options.cert)
+    ) {
+      throw new InvalidArgumentError('`cert` must be a string or Buffer.')
+    }
+    if (
+      hasKey &&
+      typeof options.key !== 'string' &&
+      !Buffer.isBuffer(options.key)
+    ) {
+      throw new InvalidArgumentError('`key` must be a string or Buffer.')
+    }
+    if (
+      options.passphrase !== undefined &&
+      typeof options.passphrase !== 'string'
+    ) {
+      throw new InvalidArgumentError('`passphrase` must be a string.')
+    }
+    this.pfx = options.pfx
+    this.cert = options.cert
+    this.key = options.key
+    this.passphrase = options.passphrase
+  }
+}
+
+/**
  * Credential variants accepted by an Analytics cluster.
  *
  * @category Authentication
  */
-export type ClusterCredential = Credential | JwtCredential
+export type ClusterCredential = Credential | JwtCredential | CertificateCredential

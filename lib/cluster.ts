@@ -16,6 +16,7 @@
  */
 
 import {
+  CertificateCredential,
   type ClusterCredential,
   Credential,
   JwtCredential,
@@ -366,8 +367,8 @@ export class Cluster {
 
   /**
    * Replace the credential used for subsequent HTTP requests, for example to
-   * refresh a JWT before it expires. The new credential must be the same
-   * kind as the current one and takes effect on the next request.
+   * refresh a JWT or rotate a client certificate. The new credential must be
+   * the same kind as the current one and takes effect on the next request.
    *
    * @param credential The new credential to use.
    * @throws {InvalidArgumentError} If `credential` is null/undefined or is a
@@ -395,10 +396,11 @@ export class Cluster {
     }
     if (
       !(credential instanceof Credential) &&
-      !(credential instanceof JwtCredential)
+      !(credential instanceof JwtCredential) &&
+      !(credential instanceof CertificateCredential)
     ) {
       throw new InvalidArgumentError(
-        'credential must be a Credential or JwtCredential.'
+        'credential must be a Credential, JwtCredential, or CertificateCredential.'
       )
     }
   }

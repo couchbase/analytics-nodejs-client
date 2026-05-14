@@ -37,6 +37,7 @@ export class HttpClient {
   private _credential: ClusterCredential
   private _hostname: string
   private _port: string
+  private _securityOptions: SecurityOptions
 
   constructor(
     url: URL,
@@ -45,9 +46,15 @@ export class HttpClient {
   ) {
     this._hostname = url.hostname
     this._credential = credential
+    this._securityOptions = securityOptions
     this.randomLookup = this.randomLookup.bind(this)
 
     if (url.protocol === 'http:') {
+      if (credential.type === 'certificate') {
+        throw new InvalidArgumentError(
+          'Client-certificate authentication requires an https:// endpoint.'
+        )
+      }
       this._port = url.port ?? '80'
       this._module = http
     } else if (url.protocol === 'https:') {
@@ -59,7 +66,7 @@ export class HttpClient {
       )
     }
 
-    this._agent = this._buildAgent(securityOptions)
+    this._agent = this._buildAgent(credential)
   }
 
   /**
@@ -76,12 +83,15 @@ export class HttpClient {
    * @internal
    */
   genericRequestOptions(): http.RequestOptions {
-    return {
+    const opts: http.RequestOptions = {
       agent: this._agent,
       hostname: this._hostname,
       port: this._port,
-      headers: { Authorization: this._credential.authorizationHeader },
     }
+    if (this._credential.type !== 'certificate') {
+      opts.headers = { Authorization: this._credential.authorizationHeader }
+    }
+    return opts
   }
 
   /**
@@ -97,6 +107,13 @@ export class HttpClient {
       )
     }
     this._credential = credential
+    if (credential.type === 'certificate') {
+      // Cert/key are baked into the agent's TLS context, so rotation needs
+      // a fresh agent. Pooled keep-alive sockets on the old agent are dropped.
+      const oldAgent = this._agent
+      this._agent = this._buildAgent(credential)
+      oldAgent.destroy()
+    }
   }
 
   /**
@@ -108,14 +125,22 @@ export class HttpClient {
     }
   }
 
-  private _buildAgent(securityOptions: SecurityOptions): HttpAgent | HttpsAgent {
+  private _buildAgent(credential: ClusterCredential): HttpAgent | HttpsAgent {
     if (this._module === http) {
       return new HttpAgent({
         keepAlive: true,
         lookup: this.randomLookup,
       })
     }
-    const tlsOptions = this._buildTlsOptions(securityOptions)
+    const tlsOptions = this._buildTlsOptions()
+    if (credential.type === 'certificate') {
+      if (credential.pfx !== undefined) tlsOptions.pfx = credential.pfx
+      if (credential.cert !== undefined) tlsOptions.cert = credential.cert
+      if (credential.key !== undefined) tlsOptions.key = credential.key
+      if (credential.passphrase !== undefined) {
+        tlsOptions.passphrase = credential.passphrase
+      }
+    }
     return new HttpsAgent({
       keepAlive: true,
       lookup: this.randomLookup,
@@ -123,9 +148,8 @@ export class HttpClient {
     })
   }
 
-  private _buildTlsOptions(
-    securityOptions: SecurityOptions
-  ): tls.ConnectionOptions {
+  private _buildTlsOptions(): tls.ConnectionOptions {
+    const securityOptions = this._securityOptions
     const tlsOptions: tls.ConnectionOptions = {}
 
     // Override the servername to use the hostname rather than the DNS record.
