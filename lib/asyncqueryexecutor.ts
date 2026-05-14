@@ -230,7 +230,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
           CouchbaseLogger.debug(
             `Received startQuery response from ${requestOptions.hostname}:${requestOptions.port}. statusCode=${res.statusCode} clientContextId=${this._clientContextId}`
           )
-          this._handleJsonResponse(res, resolve, reject)
+          this._handleJsonResponse(res, resolve, reject, ['requestID', 'handle'])
         }
       )
 
@@ -461,7 +461,8 @@ export class AsyncQueryExecutor extends QueryExecutor {
   private _handleJsonResponse<T>(
     res: http.IncomingMessage,
     resolve: (value: T) => void,
-    reject: (err: any) => void
+    reject: (err: any) => void,
+    requiredKeys?: string[]
   ): void {
     res.once('error', (err) => {
       CouchbaseLogger.error(
@@ -495,6 +496,21 @@ export class AsyncQueryExecutor extends QueryExecutor {
 
       if (parsed.errors) {
         return reject(parsed.errors)
+      }
+
+      if (requiredKeys && requiredKeys.length > 0) {
+        const missingFields = requiredKeys.filter(
+          (key) => parsed[key] === undefined
+        )
+        if (missingFields.length > 0) {
+          return reject(
+            new AnalyticsError(
+              this._requestContext.attachErrorContext(
+                `Server response is missing required fields: ${missingFields.join(', ')}`
+              )
+            )
+          )
+        }
       }
 
       resolve(parsed)
