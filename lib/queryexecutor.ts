@@ -304,7 +304,7 @@ export class QueryExecutor {
       let parsed: any = null
       try {
         parsed = JSON.parse(raw)
-      } catch (e) {
+      } catch (_e) {
         return reject(
           new AnalyticsError(
             this._requestContext.attachErrorContext(
