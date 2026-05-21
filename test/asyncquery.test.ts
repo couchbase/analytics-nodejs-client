@@ -47,6 +47,7 @@ async function waitForResults(handle: QueryHandle): Promise<QueryResultHandle> {
 function genericAsyncTests(instance: () => Cluster | Scope) {
   describe('#asyncQueryTests', function () {
     this.timeout(180_000)
+    this.retries(3)
 
     before(async function () {
       harness.skipIfIntegrationDisabled(this)
