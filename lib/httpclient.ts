@@ -19,6 +19,7 @@ import { Agent as HttpAgent } from 'node:http'
 import { Agent as HttpsAgent } from 'node:https'
 import { isIP } from 'node:net'
 import { AnalyticsError, InvalidArgumentError } from './errors.js'
+import { ConnectionError } from './internalerrors.js'
 import type { ClusterCredential } from './credential.js'
 import { SecurityOptions } from './cluster.js'
 import { Certificates } from './certificates.js'
@@ -47,7 +48,6 @@ export class HttpClient {
     this._hostname = url.hostname
     this._credential = credential
     this._securityOptions = securityOptions
-    this.randomLookup = this.randomLookup.bind(this)
 
     if (url.protocol === 'http:') {
       if (credential.type === 'certificate') {
@@ -77,19 +77,45 @@ export class HttpClient {
   }
 
   /**
-   * Returns request options with the current credential's `Authorization`
-   * header set.
+   * Returns the credential/agent/port portion of the request options, with the
+   * current credential's `Authorization` header set. Does NOT resolve the host;
+   * see {@link requestOptions} for the per-request target selection.
    *
    * @internal
    */
   genericRequestOptions(): http.RequestOptions {
     const opts: http.RequestOptions = {
       agent: this._agent,
-      hostname: this._hostname,
       port: this._port,
     }
     if (this._credential.type !== 'certificate') {
       opts.headers = { Authorization: this._credential.authorizationHeader }
+    }
+    return opts
+  }
+
+  /**
+   * Builds the options for a single request. Per the RFC, resolves the
+   * hostname and picks a random A/AAAA record per request (so the keep-alive
+   * agent does not pin to one node), connecting to that IP. The hostname is
+   * kept for the TLS SNI `servername` (via the agent) and the `Host` header,
+   * so cert verification and vhost routing are unaffected. An IP literal is
+   * used as-is.
+   *
+   * @internal
+   */
+  async requestOptions(): Promise<http.RequestOptions> {
+    const opts = this.genericRequestOptions()
+
+    if (isIP(this._hostname) !== 0) {
+      opts.host = this._hostname
+      return opts
+    }
+
+    opts.host = await this._selectRequestAddress()
+    opts.headers = {
+      ...opts.headers,
+      Host: `${this._hostname}:${this._port}`,
     }
     return opts
   }
@@ -129,7 +155,6 @@ export class HttpClient {
     if (this._module === http) {
       return new HttpAgent({
         keepAlive: true,
-        lookup: this.randomLookup,
       })
     }
     const tlsOptions = this._buildTlsOptions()
@@ -143,7 +168,6 @@ export class HttpClient {
     }
     return new HttpsAgent({
       keepAlive: true,
-      lookup: this.randomLookup,
       ...tlsOptions,
     })
   }
@@ -194,35 +218,29 @@ export class HttpClient {
   }
 
   /**
+   * Resolves the hostname's A/AAAA records via `dns.lookup` (getaddrinfo) and
+   * returns one at random. DNS-resolution failures are wrapped as a request-side
+   * {@link ConnectionError} so they rejoin the retry path; we resolve before
+   * `http.request`, so they would otherwise never reach its `error` event. An
+   * empty result is treated like `ENOTFOUND`.
+   *
    * @internal
    */
-  randomLookup(
-    hostname: string,
-    options: dns.LookupOptions,
-    callback: (
-      err: NodeJS.ErrnoException | null,
-      address: string | dns.LookupAddress[],
-      family?: number
-    ) => void
-  ): void {
-    // There are two flavours of the callback signature. if 'all' is true: (err, address[]) else (err, address, family)
-    // On Node.js versions > 18, 'all' is true by default, which means we have to handle both cases.
-    // See https://github.com/nodejs/node/issues/55762
-    const wantAll = options.all
-    dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
-      if (err || addresses.length === 0) {
-        const e = err ?? new Error(`No addresses found for ${hostname}`)
-        return callback(e, wantAll ? [] : '', undefined)
-      }
-      const selectedAddress =
-        addresses[Math.floor(Math.random() * addresses.length)]
-
-      if (wantAll) {
-        callback(null, [selectedAddress])
-      } else {
-        callback(null, selectedAddress.address, selectedAddress.family)
-      }
-    })
+  private async _selectRequestAddress(): Promise<string> {
+    let addresses: dns.LookupAddress[]
+    try {
+      addresses = await dns.promises.lookup(this._hostname, { all: true })
+    } catch (err) {
+      throw new ConnectionError(err as Error, true)
+    }
+    if (addresses.length === 0) {
+      const noRecords = new Error(
+        `No addresses found for ${this._hostname}`
+      ) as NodeJS.ErrnoException
+      noRecords.code = 'ENOTFOUND'
+      throw new ConnectionError(noRecords, true)
+    }
+    return addresses[Math.floor(Math.random() * addresses.length)].address
   }
 
   /**

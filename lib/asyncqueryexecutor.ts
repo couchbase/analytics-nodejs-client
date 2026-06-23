@@ -79,8 +79,8 @@ export class AsyncQueryExecutor extends QueryExecutor {
     const body = JSON.stringify(encodedOptions)
 
     return await runWithRetry(
-      () => {
-        const generic = this._cluster.httpClient.genericRequestOptions()
+      async () => {
+        const generic = await this._cluster.httpClient.requestOptions()
         const requestOptions: http.RequestOptions = {
           ...generic,
           method: 'POST',
@@ -108,8 +108,8 @@ export class AsyncQueryExecutor extends QueryExecutor {
     this._requestContext.setGenericRequestContextFields('', statusHandle, 'GET')
 
     return await runWithRetry(
-      () => {
-        const generic = this._cluster.httpClient.genericRequestOptions()
+      async () => {
+        const generic = await this._cluster.httpClient.requestOptions()
         const requestOptions: http.RequestOptions = {
           ...generic,
           method: 'GET',
@@ -136,8 +136,8 @@ export class AsyncQueryExecutor extends QueryExecutor {
     const body = `request_id=${encodeURIComponent(requestId)}`
 
     return await runWithRetry(
-      () => {
-        const generic = this._cluster.httpClient.genericRequestOptions()
+      async () => {
+        const generic = await this._cluster.httpClient.requestOptions()
         const requestOptions: http.RequestOptions = {
           ...generic,
           method: 'DELETE',
@@ -168,8 +168,8 @@ export class AsyncQueryExecutor extends QueryExecutor {
     this._requestContext.setGenericRequestContextFields('', resultHandle, 'GET')
 
     return await runWithRetry(
-      () => {
-        const generic = this._cluster.httpClient.genericRequestOptions()
+      async () => {
+        const generic = await this._cluster.httpClient.requestOptions()
         const requestOptions: http.RequestOptions = {
           ...generic,
           method: 'GET',
@@ -197,8 +197,8 @@ export class AsyncQueryExecutor extends QueryExecutor {
     )
 
     return await runWithRetry(
-      () => {
-        const generic = this._cluster.httpClient.genericRequestOptions()
+      async () => {
+        const generic = await this._cluster.httpClient.requestOptions()
         const requestOptions: http.RequestOptions = {
           ...generic,
           method: 'DELETE',
@@ -228,7 +228,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
         requestOptions,
         (res) => {
           CouchbaseLogger.debug(
-            `Received startQuery response from ${requestOptions.hostname}:${requestOptions.port}. statusCode=${res.statusCode} clientContextId=${this._clientContextId}`
+            `Received startQuery response from ${requestOptions.host}:${requestOptions.port}. statusCode=${res.statusCode} clientContextId=${this._clientContextId}`
           )
           this._handleJsonResponse(res, resolve, reject, ['requestID', 'handle'])
         }
@@ -240,7 +240,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
 
       req.on('error', (err) => {
         CouchbaseLogger.error(
-          `Error sending startQuery request to ${requestOptions.hostname}:${requestOptions.port}, details: ${err.message}. clientContextId=${this._clientContextId}`
+          `Error sending startQuery request to ${requestOptions.host}:${requestOptions.port}, details: ${err.message}. clientContextId=${this._clientContextId}`
         )
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
@@ -249,7 +249,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
 
       req.on('connectTimeout', () => {
         CouchbaseLogger.error(
-          `Connection timeout for startQuery request to ${requestOptions.hostname}:${requestOptions.port}. clientContextId=${this._clientContextId}`
+          `Connection timeout for startQuery request to ${requestOptions.host}:${requestOptions.port}. clientContextId=${this._clientContextId}`
         )
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
@@ -259,7 +259,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
       this._attachConnectTimeout(req)
 
       CouchbaseLogger.debug(
-        `Sending startQuery request to ${requestOptions.hostname}:${requestOptions.port}. body=${body}. clientContextId=${this._clientContextId}`
+        `Sending startQuery request to ${requestOptions.host}:${requestOptions.port}. body=${body}. clientContextId=${this._clientContextId}`
       )
       req.write(body)
       req.end()
@@ -292,7 +292,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
         requestOptions,
         (res) => {
           CouchbaseLogger.debug(
-            `Received response from ${requestOptions.hostname}:${requestOptions.port}. statusCode=${res.statusCode} path=${requestOptions.path} clientContextId=${this._clientContextId}`
+            `Received response from ${requestOptions.host}:${requestOptions.port}. statusCode=${res.statusCode} path=${requestOptions.path} clientContextId=${this._clientContextId}`
           )
           this._handleJsonResponse(res, resolve, reject)
         }
@@ -304,7 +304,7 @@ export class AsyncQueryExecutor extends QueryExecutor {
 
       req.on('error', (err) => {
         CouchbaseLogger.error(
-          `Error sending request to ${requestOptions.hostname}:${requestOptions.port}${requestOptions.path}, details: ${err.message}. clientContextId=${this._clientContextId}`
+          `Error sending request to ${requestOptions.host}:${requestOptions.port}${requestOptions.path}, details: ${err.message}. clientContextId=${this._clientContextId}`
         )
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
