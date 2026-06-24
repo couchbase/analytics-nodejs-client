@@ -111,9 +111,10 @@ describe('#Host selection', function () {
     }
   })
 
-  it('rejects with a retriable ConnectionError when no records resolve', async function () {
-    // An empty result is a DNS failure; per the RFC it should rejoin the retry
-    // path, so it is wrapped as a request-side ConnectionError carrying ENOTFOUND.
+  it('wraps a no-records DNS result as a request-side ConnectionError', async function () {
+    // An empty result is a DNS failure, so it is wrapped as a request-side
+    // ConnectionError carrying ENOTFOUND, rejoining the request error path.
+    // Whether that code retries is decided separately by ErrorHandler.
     stubLookup([])
     const cluster = createInstance(
       `https://${HOSTNAME}:${PORT}`,
@@ -136,7 +137,7 @@ describe('#Host selection', function () {
     }
   })
 
-  it('wraps a DNS-resolution failure as a retriable ConnectionError', async function () {
+  it('wraps a DNS-resolution failure as a request-side ConnectionError', async function () {
     // e.g. a transient resolver failure during a rebalance.
     stubLookup(() => {
       const e = new Error('getaddrinfo EAI_AGAIN') as NodeJS.ErrnoException
@@ -157,7 +158,7 @@ describe('#Host selection', function () {
       }
       assert.instanceOf(caught, ConnectionError)
       const err = caught as ConnectionError
-      // isRequestError + a DNS code is what ErrorHandler classifies as retriable.
+      // isRequestError + the original code is what ErrorHandler uses to classify the failure.
       assert.isTrue(err.isRequestError)
       assert.strictEqual((err.cause as NodeJS.ErrnoException).code, 'EAI_AGAIN')
     } finally {
