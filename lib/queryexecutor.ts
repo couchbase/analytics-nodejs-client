@@ -123,10 +123,10 @@ export class QueryExecutor {
     const body = JSON.stringify(encodedOptions)
 
     return await runWithRetry(
-      () => {
+      async () => {
         // Rebuild per attempt so a credential rotated mid-query takes effect
-        // on the next retry.
-        const generic = this._cluster.httpClient.genericRequestOptions()
+        // on the next retry, and so each attempt re-selects an A/AAAA record.
+        const generic = await this._cluster.httpClient.requestOptions()
         const requestOptions: http.RequestOptions = {
           ...generic,
           method: 'POST',
@@ -167,7 +167,7 @@ export class QueryExecutor {
         requestOptions,
         (res) => {
           CouchbaseLogger.debug(
-            `Received query response from ${requestOptions.hostname}:${requestOptions.port}. statusCode=${res.statusCode} clientContextId=${this._clientContextId}`
+            `Received query response from ${requestOptions.host}:${requestOptions.port}. statusCode=${res.statusCode} clientContextId=${this._clientContextId}`
           )
           this._handleStreamingResponse(res, resolve, reject, deadline)
         }
@@ -179,7 +179,7 @@ export class QueryExecutor {
 
       req.on('error', (err) => {
         CouchbaseLogger.error(
-          `Error occurred while sending query request to ${requestOptions.hostname}:${requestOptions.port}, details: ${err.message}. clientContextId=${this._clientContextId}`
+          `Error occurred while sending query request to ${requestOptions.host}:${requestOptions.port}, details: ${err.message}. clientContextId=${this._clientContextId}`
         )
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
@@ -188,7 +188,7 @@ export class QueryExecutor {
 
       req.on('connectTimeout', () => {
         CouchbaseLogger.error(
-          `Connection timeout for query request to ${requestOptions.hostname}:${requestOptions.port}. clientContextId=${this._clientContextId}`
+          `Connection timeout for query request to ${requestOptions.host}:${requestOptions.port}. clientContextId=${this._clientContextId}`
         )
         req.destroy()
         this._signal.removeEventListener('abort', abortHandler)
@@ -198,7 +198,7 @@ export class QueryExecutor {
       this._attachConnectTimeout(req)
 
       CouchbaseLogger.debug(
-        `Sending request to ${requestOptions.hostname}:${requestOptions.port}. body=${body}. clientContextId=${this._clientContextId}`
+        `Sending request to ${requestOptions.host}:${requestOptions.port}. body=${body}. clientContextId=${this._clientContextId}`
       )
 
       req.write(body)

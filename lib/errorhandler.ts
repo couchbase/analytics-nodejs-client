@@ -211,43 +211,37 @@ export class ErrorHandler {
       return false
     }
 
-    return !connectionDenyList.has(nodeError.code)
+    // Per the RFC, only DNS and TCP-dial failures retry; anything after the
+    // socket is dialed (TLS handshake, cert verification) must fail fast.
+    return connectionRetryAllowList.has(nodeError.code)
   }
 }
 
 /**
- * Taken from https://github.com/sindresorhus/is-retry-allowed
+ * Node `err.code`s for the DNS and TCP-dial failures the RFC marks retriable.
+ *
  * @internal
  */
-const connectionDenyList = new Set([
+const connectionRetryAllowList = new Set([
+  // DNS resolution failures
+  'EAI_AGAIN',
   'ENOTFOUND',
+  // TCP-dial / connection failures
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ECONNABORTED',
+  'ETIMEDOUT',
+  'EHOSTUNREACH',
+  'EHOSTDOWN',
   'ENETUNREACH',
-  'UNABLE_TO_GET_ISSUER_CERT',
-  'UNABLE_TO_GET_CRL',
-  'UNABLE_TO_DECRYPT_CERT_SIGNATURE',
-  'UNABLE_TO_DECRYPT_CRL_SIGNATURE',
-  'UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY',
-  'CERT_SIGNATURE_FAILURE',
-  'CRL_SIGNATURE_FAILURE',
-  'CERT_NOT_YET_VALID',
-  'CERT_HAS_EXPIRED',
-  'CRL_NOT_YET_VALID',
-  'CRL_HAS_EXPIRED',
-  'ERROR_IN_CERT_NOT_BEFORE_FIELD',
-  'ERROR_IN_CERT_NOT_AFTER_FIELD',
-  'ERROR_IN_CRL_LAST_UPDATE_FIELD',
-  'ERROR_IN_CRL_NEXT_UPDATE_FIELD',
-  'OUT_OF_MEM',
-  'DEPTH_ZERO_SELF_SIGNED_CERT',
-  'SELF_SIGNED_CERT_IN_CHAIN',
-  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
-  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
-  'CERT_CHAIN_TOO_LONG',
-  'CERT_REVOKED',
-  'INVALID_CA',
-  'PATH_LENGTH_EXCEEDED',
-  'INVALID_PURPOSE',
-  'CERT_UNTRUSTED',
-  'CERT_REJECTED',
-  'HOSTNAME_MISMATCH',
+  'ENETDOWN',
+  'ENETRESET',
+  'EADDRNOTAVAIL',
+  // EPIPE looks like a post-dial write failure, but it only reaches here as a
+  // request-side error (isRequestError), meaning the peer tore down the
+  // connection before accepting our request (e.g. a closed keep-alive socket,
+  // an LB drop, or a restarting node). Nothing was processed, so retrying is
+  // safe. A broken pipe after the server began responding surfaces as a
+  // response-side error and fails fast instead.
+  'EPIPE',
 ])
