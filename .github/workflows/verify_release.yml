@@ -27,11 +27,11 @@ on:
         type: string
 
 env:
-  DEFAULT_NODE: "20"
+  DEFAULT_NODE: "24"
 
 jobs:
   validate-input:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Verify SDK version
         if: inputs.version == ''
@@ -40,7 +40,7 @@ jobs:
           exit 1
 
   test-setup:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: validate-input
     steps:
       - name: Setup Node.js
@@ -65,13 +65,13 @@ jobs:
             NCBAC-test/
 
   verify-cbdinocluster:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: test-setup
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-22.04']
-        node-version: ["20", "22", "24"]
+        os: ['ubuntu-24.04']
+        node-version: ["22", "24", "26"]
     steps:
       - name: Install cbdinocluster
         run: |
@@ -96,7 +96,7 @@ jobs:
               - count: 3
                 version: 2.2.0
                 docker:
-                  image: ghcr.io/cb-vanilla/enterprise-analytics:2.2.0-1200
+                  image: ghcr.io/cb-vanilla/enterprise-analytics:2.2.0-1314
             docker:
               load-balancer: true
               use-dino-certs: true
