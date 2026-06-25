@@ -37,7 +37,9 @@
   },
   "overrides": {
     "diff": "^9.0.0",
-    "serialize-javascript": "^7.0.5"
+    "serialize-javascript": "^7.0.5",
+    "js-yaml": "^4.2.0",
+    "esbuild": "^0.28.1"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
